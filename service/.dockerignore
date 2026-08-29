@@ -1,0 +1,10 @@
+.git
+.github
+*.md
+.DS_Store
+service
+bin
+out
+tmp
+*.json
+!web/**

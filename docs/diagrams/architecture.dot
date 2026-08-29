@@ -1,0 +1,105 @@
+digraph OmiPixelArchitecture {
+    graph [
+        rankdir=LR,
+        bgcolor="#0f172a",
+        fontname="Helvetica,Arial,sans-serif",
+        fontsize=12,
+        pad="0.5",
+        nodesep="0.6",
+        ranksep="0.8",
+        splines=polyline
+    ];
+
+    node [
+        shape=box,
+        style="filled,rounded",
+        fontname="Helvetica,Arial,sans-serif",
+        fontsize=11,
+        color="#334155",
+        fontcolor="#f8fafc",
+        penwidth=1.5,
+        margin="0.2,0.15"
+    ];
+
+    edge [
+        fontname="Helvetica,Arial,sans-serif",
+        fontsize=9,
+        color="#94a3b8",
+        fontcolor="#38bdf8",
+        penwidth=1.2,
+        arrowsize=0.8
+    ];
+
+    subgraph cluster_hardware {
+        label="Wearable Hardware";
+        fontcolor="#94a3b8";
+        color="#334155";
+        style="dashed,rounded";
+        omi_dev [label="Omi Wearable\n(DevKit / CV1)", fillcolor="#1e293b", color="#38bdf8"];
+    }
+
+    subgraph cluster_phone {
+        label="Pixel 11 Android Companion (Flutter)";
+        fontcolor="#94a3b8";
+        color="#334155";
+        style="rounded";
+        bgcolor="#1e293b";
+
+        ble_layer [label="BLE Client\n(omi_device SDK)", fillcolor="#334155"];
+        decoder [label="Opus Decoder\n(16kHz PCM / Codec 20 & 21)", fillcolor="#334155"];
+        auth_service [label="Firebase Auth\n(Google Sign-In)", fillcolor="#d97706", fontcolor="#ffffff"];
+        session_mgr [label="Session Manager\n& WAV Packager", fillcolor="#334155"];
+        live_client [label="Live WS Client\n(/api/live)", fillcolor="#0284c7", fontcolor="#ffffff"];
+        ui_live [label="Live Flutter UI\n(Realtime Verbatim Transcript)", fillcolor="#0f172a"];
+
+        ble_layer -> decoder [label="Opus Packets"];
+        decoder -> session_mgr [label="PCM Buffer"];
+        decoder -> live_client [label="PCM Chunks"];
+        live_client -> ui_live [label="Live Text"];
+    }
+
+    subgraph cluster_cloud {
+        label="Cloud Run Backend Service (Go)";
+        fontcolor="#94a3b8";
+        color="#334155";
+        style="rounded";
+        bgcolor="#1e293b";
+
+        authmw [label="Firebase Auth &\nAllowlist Middleware", fillcolor="#b45309", fontcolor="#ffffff"];
+        live_proxy [label="Live WS Proxy\n(Bidi Relaying)", fillcolor="#0284c7", fontcolor="#ffffff"];
+        http_api [label="HTTP API Router\n(/api/sessions)", fillcolor="#475569"];
+        gcs_store [label="GCS Audio Store\n(gs://...-omi-pixel-audio)", fillcolor="#059669", fontcolor="#ffffff"];
+        gemini_engine [label="Vertex AI Client\n(3.5 Transcribe / 3.5 Flash-Lite / 3.7 Flash)", fillcolor="#4338ca", fontcolor="#ffffff"];
+        store [label="Firestore DB\n(named: omi-pixel)", fillcolor="#047857", fontcolor="#ffffff"];
+        web_ui [label="Web Review UI\n(Responsive HTML)", fillcolor="#0f172a"];
+
+        authmw -> live_proxy;
+        authmw -> http_api;
+        http_api -> gcs_store [label="WAV Audio"];
+        http_api -> gemini_engine [label="Diarize & Summarize"];
+        gemini_engine -> store [label="Segments & Metadata"];
+        store -> web_ui [label="Render Detail"];
+    }
+
+    subgraph cluster_vertex {
+        label="Google Cloud Vertex AI (global / ADC)";
+        fontcolor="#94a3b8";
+        color="#334155";
+        style="dashed,rounded";
+        vertex_live [label="Gemini 3.5 Transcribe Live\n(BidiGenerateContent)", fillcolor="#0369a1", fontcolor="#ffffff"];
+        vertex_batch [label="Gemini 3.5 Transcribe\n(REST generateContent)", fillcolor="#3730a3", fontcolor="#ffffff"];
+        vertex_title [label="Gemini 3.5 Flash-Lite\n(Title Generation)", fillcolor="#6d28d9", fontcolor="#ffffff"];
+        vertex_summary [label="Gemini 3.7 Flash\n(Summary Generation)", fillcolor="#5b21b6", fontcolor="#ffffff"];
+    }
+
+    omi_dev -> ble_layer [label="BLE GATT\n(Notify)", color="#38bdf8"];
+    live_client -> live_proxy [label="WSS /api/live\n(?access_token=...)", color="#38bdf8"];
+    live_proxy -> vertex_live [label="Bidi WS\n(ADC Token)", color="#38bdf8"];
+    vertex_live -> live_proxy [label="Verbatim Tokens", color="#38bdf8"];
+    live_proxy -> live_client [label="Clean Event JSON", color="#38bdf8"];
+
+    session_mgr -> http_api [label="POST /audio\n(Bearer Token)", color="#10b981"];
+    gemini_engine -> vertex_batch [label="fileUri: gs://...", color="#a855f7"];
+    gemini_engine -> vertex_title [label="Transcript -> Title", color="#a855f7"];
+    gemini_engine -> vertex_summary [label="Transcript -> Summary", color="#a855f7"];
+}

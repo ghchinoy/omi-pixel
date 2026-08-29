@@ -1,0 +1,77 @@
+name: omi_pixel
+description: "Minimal Omi companion app for Android Pixel 11 with Gemini 3.5 Transcribe Live and diarization."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Local Omi Device SDK
+  omi_device:
+    path: ../../omi/sdks/device/dart
+
+  # Opus Audio Decoder
+  opus_flutter: ^3.0.3
+  opus_dart:
+    git:
+      url: https://github.com/mdmohsin7/opus_dart.git
+
+  # BLE & Network
+  flutter_blue_plus: ^1.35.0
+  web_socket_channel: ^3.0.0
+  http: ^1.2.0
+
+  # Storage & Utilities
+  shared_preferences: ^2.2.0
+  uuid: ^4.4.0
+  path_provider: ^2.1.2
+  intl: ^0.19.0
+
+  # Permissions & Android Services
+  permission_handler: ^11.3.0
+  flutter_foreground_task: ^8.1.0
+
+  # UI
+  cupertino_icons: ^1.0.8
+  firebase_core: ^3.12.0
+  firebase_auth: ^5.5.0
+  google_sign_in: 6.2.2
+  just_audio: ^0.10.6
+
+dependency_overrides:
+  opus_flutter_android:
+    git:
+      url: https://github.com/mdmohsin7/opus_flutter.git
+      path: opus_flutter_android
+      ref: 16kb
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon.png"
+  adaptive_icon_background: "#0F172A"
+  adaptive_icon_foreground: "assets/icon/icon.png"
+  min_sdk_android: 24
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: "assets/icon/icon.png"
+  macos:
+    generate: true
+    image_path: "assets/icon/icon.png"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icon/

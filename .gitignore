@@ -1,0 +1,50 @@
+# ---- OS / editor ----
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+# ---- Logs & temp ----
+*.log
+*.tmp
+
+# ---- Flutter / Dart build artifacts ----
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.packages
+app/build/
+app/.pub-cache/
+app/pubspec.lock
+
+# ---- Native build artifacts ----
+app/android/.gradle/
+app/android/app/debug/
+app/android/app/profile/
+app/android/app/release/
+app/ios/Pods/
+app/ios/.symlinks/
+app/macos/Pods/
+app/**/Flutter/ephemeral/
+
+# ---- Go artifacts ----
+service/server
+service/*.test
+service/*.out
+service/*.prof
+
+# ---- Secrets & local configuration ----
+*.env
+infra/.env
+*.keystore
+*.jks
+*.p12
+*.pem
+
+# ---- Firebase client config (regenerate via `flutterfire configure`) ----
+app/firebase.json
+app/android/app/google-services.json
+app/ios/Runner/GoogleService-Info.plist
+app/macos/Runner/GoogleService-Info.plist
+

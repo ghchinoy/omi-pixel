@@ -1,0 +1,65 @@
+digraph OmiPixelDataFlow {
+    graph [
+        rankdir=TB,
+        bgcolor="#0f172a",
+        fontname="Helvetica,Arial,sans-serif",
+        fontsize=12,
+        pad="0.5",
+        nodesep="0.5",
+        ranksep="0.6"
+    ];
+
+    node [
+        shape=box,
+        style="filled,rounded",
+        fontname="Helvetica,Arial,sans-serif",
+        fontsize=11,
+        color="#334155",
+        fontcolor="#f8fafc",
+        penwidth=1.5,
+        margin="0.2,0.12"
+    ];
+
+    edge [
+        fontname="Helvetica,Arial,sans-serif",
+        fontsize=9,
+        color="#94a3b8",
+        fontcolor="#38bdf8",
+        penwidth=1.2,
+        arrowsize=0.8
+    ];
+
+    // Nodes
+    step_mic [label="1. Omi Microphone Capture\n(16kHz Mono Audio)", fillcolor="#1e293b", color="#38bdf8"];
+    step_ble [label="2. BLE Stream Transmission\n(Opus Codec 20 / 21 + 3-Byte Packet Header)", fillcolor="#1e293b"];
+    step_decode [label="3. Flutter Phone Audio Pipeline\n(Header Strip + Native Opus Decode -> 16kHz PCM)", fillcolor="#0284c7", fontcolor="#ffffff"];
+    
+    // Split branches
+    step_live_ws [label="Pass 1: Live Streaming Proxy (/api/live)\n(Gemini 3.5 Transcribe Live on Vertex AI)", fillcolor="#0369a1", fontcolor="#ffffff"];
+    step_live_ui [label="Live Screen Render\n(Instant Verbatim Running Text)", fillcolor="#1e293b", color="#38bdf8"];
+
+    step_wav_pack [label="Pass 2: End of Session WAV Packaging\n(44-Byte RIFF Header + PCM Buffer)", fillcolor="#047857", fontcolor="#ffffff"];
+    step_upload [label="HTTP Upload to Cloud Run\n(POST /api/sessions/{id}/audio?summary=true|false)", fillcolor="#475569"];
+    step_gcs [label="GCS Audio Persistence\n(gs://...-omi-pixel-audio/sessions/{id}/audio.wav)", fillcolor="#059669", fontcolor="#ffffff"];
+    step_diarize [label="Pass 2: Speaker Diarization\n(Gemini 3.5 Transcribe with word timestamps)", fillcolor="#4338ca", fontcolor="#ffffff"];
+    step_synthesis [label="Pass 3: Title & Synthesis\n(Gemini 3.5 Flash-Lite Title + Gemini 3.7 Flash Summary)", fillcolor="#6d28d9", fontcolor="#ffffff"];
+    step_store [label="Persistence in Firestore\n(Session Metadata, Title, Summary & Speaker Turns)", fillcolor="#10b981", fontcolor="#0f172a"];
+    step_review [label="Review & Playback Surfaces\n(Pixel 11 Detail View + Responsive Web Dashboard)", fillcolor="#0f172a", color="#10b981"];
+
+    // Flow
+    step_mic -> step_ble;
+    step_ble -> step_decode;
+
+    // Pass 1
+    step_decode -> step_live_ws [label="~100ms PCM Chunks"];
+    step_live_ws -> step_live_ui [label="Verbatim Transcript Tokens"];
+
+    // Pass 2 & 3
+    step_decode -> step_wav_pack [label="Accumulated PCM Chunks"];
+    step_wav_pack -> step_upload [label="Complete WAV File"];
+    step_upload -> step_gcs [label="Store WAV"];
+    step_gcs -> step_diarize [label="fileUri: gs://..."];
+    step_diarize -> step_synthesis [label="Speaker Turns"];
+    step_synthesis -> step_store [label="Complete Session"];
+    step_store -> step_review [label="Diarized Conversation JSON/HTML"];
+}
