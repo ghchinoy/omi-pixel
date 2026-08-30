@@ -139,7 +139,7 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		log.Printf("Omi-Pixel Service listening on port %s", port)
+		log.Printf("Omi-Pixel Service v%s listening on port %s", Version, port)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server listen error: %v", err)
 		}

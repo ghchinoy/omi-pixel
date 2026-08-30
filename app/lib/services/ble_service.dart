@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:omi_device/omi_device.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/device.dart';
 import 'audio_decoder.dart';
@@ -11,6 +12,9 @@ class BleService {
   static final BleService instance = BleService._();
   BleService._();
 
+  static const String _keyLastDeviceId = 'last_ble_device_id';
+  static const String _keyLastDeviceName = 'last_ble_device_name';
+
   final OmiBleClient _bleClient = createOmiBleClient();
 
   OmiDeviceInfo? _currentDevice;
@@ -18,6 +22,12 @@ class BleService {
 
   final _deviceController = StreamController<OmiDeviceInfo?>.broadcast();
   Stream<OmiDeviceInfo?> get deviceStream => _deviceController.stream;
+
+  bool _isReconnecting = false;
+  bool get isReconnecting => _isReconnecting;
+
+  final _reconnectingController = StreamController<bool>.broadcast();
+  Stream<bool> get reconnectingStream => _reconnectingController.stream;
 
   Stream<bool> get scanningStream => FlutterBluePlus.isScanning;
   bool get isScanning => FlutterBluePlus.isScanningNow;
@@ -85,6 +95,14 @@ class BleService {
         batteryLevel: battery,
       );
       _deviceController.add(_currentDevice);
+
+      // Persist last connected device
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_keyLastDeviceId, device.id);
+        await prefs.setString(_keyLastDeviceName, device.name);
+      } catch (_) {}
+
       return true;
     } catch (e) {
       _currentDevice = null;
@@ -101,6 +119,48 @@ class BleService {
     } catch (_) {}
     _currentDevice = null;
     _deviceController.add(null);
+
+    // Clear saved device on explicit disconnect
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keyLastDeviceId);
+      await prefs.remove(_keyLastDeviceName);
+    } catch (_) {}
+  }
+
+  Future<OmiDeviceInfo?> getLastConnectedDevice() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final id = prefs.getString(_keyLastDeviceId);
+      final name = prefs.getString(_keyLastDeviceName) ?? 'Omi Device';
+      if (id != null && id.isNotEmpty) {
+        return OmiDeviceInfo(id: id, name: name);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<bool> tryReconnectLastDevice() async {
+    if (_currentDevice != null && _currentDevice!.isConnected) {
+      return true;
+    }
+    final lastDev = await getLastConnectedDevice();
+    if (lastDev == null) {
+      return false;
+    }
+
+    _isReconnecting = true;
+    _reconnectingController.add(true);
+    try {
+      await requestPermissions();
+      final ok = await connect(lastDev);
+      return ok;
+    } catch (_) {
+      return false;
+    } finally {
+      _isReconnecting = false;
+      _reconnectingController.add(false);
+    }
   }
 
   /// Returns stream of 16kHz 16-bit mono PCM chunks.

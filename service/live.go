@@ -51,6 +51,33 @@ type ClientTranscriptEvent struct {
 	Error     string  `json:"error,omitempty"`
 }
 
+// BuildLiveSetupMessage constructs the setup payload sent to Vertex AI Multimodal Live WebSocket.
+func BuildLiveSetupMessage(modelPath, modeParam, langParam string) map[string]interface{} {
+	inputAudioTranscription := map[string]interface{}{}
+
+	cleanMode := strings.ToUpper(strings.TrimSpace(modeParam))
+	if cleanMode == "SMART" {
+		inputAudioTranscription["mode"] = "SMART"
+	} else if cleanMode == "VERBATIM" {
+		inputAudioTranscription["mode"] = "VERBATIM"
+	}
+
+	cleanLang := strings.TrimSpace(langParam)
+	if cleanLang != "" && cleanLang != "multi" {
+		inputAudioTranscription["languageCodes"] = []string{mapLanguageToBCP47(cleanLang)}
+	}
+
+	return map[string]interface{}{
+		"setup": map[string]interface{}{
+			"model": modelPath,
+			"generationConfig": map[string]interface{}{
+				"responseModalities": []string{"TEXT"},
+			},
+			"inputAudioTranscription": inputAudioTranscription,
+		},
+	}
+}
+
 func (lp *LiveProxy) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
@@ -59,6 +86,9 @@ func (lp *LiveProxy) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Vertex AI credentials or GOOGLE_CLOUD_PROJECT not configured", http.StatusServiceUnavailable)
 		return
 	}
+
+	modeParam := r.URL.Query().Get("mode")
+	langParam := r.URL.Query().Get("lang")
 
 	// 1. Upgrade client connection
 	clientConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
@@ -108,15 +138,8 @@ func (lp *LiveProxy) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[LiveProxy] Connected to Vertex AI Live API for model %s", modelPath)
 
 	// 4. Send initial Setup frame to Vertex AI
-	setupMsg := map[string]interface{}{
-		"setup": map[string]interface{}{
-			"model": modelPath,
-			"generationConfig": map[string]interface{}{
-				"responseModalities": []string{"TEXT"},
-			},
-			"inputAudioTranscription": map[string]interface{}{},
-		},
-	}
+	setupMsg := BuildLiveSetupMessage(modelPath, modeParam, langParam)
+	log.Printf("[LiveProxy] Sending Live setup for model %s (mode=%q, lang=%q)", modelPath, modeParam, langParam)
 	setupBytes, _ := json.Marshal(setupMsg)
 	if err := vertexConn.Write(ctx, websocket.MessageText, setupBytes); err != nil {
 		log.Printf("[LiveProxy] Failed to write setup message: %v", err)

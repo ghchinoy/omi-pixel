@@ -6,7 +6,9 @@ import 'package:just_audio/just_audio.dart';
 
 import '../models/segment.dart';
 import '../models/session.dart';
+import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../services/session_manager.dart';
 import '../services/settings_service.dart';
 
 class SessionDetailScreen extends StatefulWidget {
@@ -19,9 +21,11 @@ class SessionDetailScreen extends StatefulWidget {
 }
 
 class _SessionDetailScreenState extends State<SessionDetailScreen> {
+  late Session _session;
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _audioAvailable = false;
   bool _audioLoading = false;
+  bool _detailLoading = false;
   double _currentPositionSec = 0.0;
 
   StreamSubscription? _posSub;
@@ -29,12 +33,52 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _session = widget.session;
+    _fetchFullSessionDetail();
     _initAudio();
+  }
+
+  Future<void> _fetchFullSessionDetail() async {
+    if (!ApiClient.instance.isConfigured) return;
+
+    // If segments or summary are missing, fetch the full SessionDetail from backend
+    if (_session.segments.isEmpty || _session.summary.isEmpty || !_session.hasAudio) {
+      setState(() {
+        _detailLoading = true;
+      });
+    }
+
+    try {
+      final detailed = await ApiClient.instance.getSession(_session.id);
+      if (detailed != null && mounted) {
+        final hadNoAudio = !_session.hasAudio && _session.audioUrl.isEmpty;
+        setState(() {
+          _session = detailed;
+          _detailLoading = false;
+        });
+        SessionManager.instance.updateCachedSession(detailed);
+
+        // If audio became available from detail fetch, initialize audio player
+        if (hadNoAudio && (detailed.hasAudio || detailed.audioUrl.isNotEmpty)) {
+          _initAudio();
+        }
+      } else if (mounted) {
+        setState(() {
+          _detailLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _detailLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> _initAudio() async {
     final baseUrl = SettingsService.instance.cloudRunUrl;
-    if (baseUrl.isEmpty || (!widget.session.hasAudio && widget.session.audioUrl.isEmpty)) {
+    if (baseUrl.isEmpty || (!_session.hasAudio && _session.audioUrl.isEmpty)) {
       return;
     }
 
@@ -44,7 +88,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
     try {
       final token = await AuthService.instance.getIdToken();
-      final audioUrl = '$baseUrl/api/sessions/${widget.session.id}/audio';
+      final audioUrl = '$baseUrl/api/sessions/${_session.id}/audio';
       final headers = (token != null && token.isNotEmpty)
           ? {'Authorization': 'Bearer $token'}
           : <String, String>{};
@@ -102,13 +146,13 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
   void _copyTranscript(BuildContext context) {
     final buffer = StringBuffer();
-    buffer.writeln('Title: ${widget.session.title}');
-    buffer.writeln('Date: ${DateFormat('yyyy-MM-dd HH:mm').format(widget.session.startedAt)}');
-    if (widget.session.summary.isNotEmpty) {
-      buffer.writeln('\nSummary:\n${widget.session.summary}\n');
+    buffer.writeln('Title: ${_session.title}');
+    buffer.writeln('Date: ${DateFormat('yyyy-MM-dd HH:mm').format(_session.startedAt)}');
+    if (_session.summary.isNotEmpty) {
+      buffer.writeln('\nSummary:\n${_session.summary}\n');
     }
     buffer.writeln('Transcript:');
-    for (final seg in widget.session.segments) {
+    for (final seg in _session.segments) {
       buffer.writeln('[${_formatDuration(seg.start)}] ${seg.speaker}: ${seg.text}');
     }
 
@@ -129,7 +173,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dateFormat = DateFormat('MMM dd, yyyy • HH:mm');
-    final session = widget.session;
+    final session = _session;
 
     return Scaffold(
       appBar: AppBar(
@@ -332,11 +376,23 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Diarized Turns (${session.segments.length})',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                children: [
+                  Text(
+                    'Diarized Turns (${session.segments.length})',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (_detailLoading) ...[
+                    const SizedBox(width: 8),
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ],
+                ],
               ),
               if (_audioAvailable)
                 Text(
@@ -352,10 +408,19 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(32.0),
                 child: Center(
-                  child: Text(
-                    'No speaker segments available for this session.',
-                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-                  ),
+                  child: _detailLoading
+                      ? const Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 12),
+                            Text('Loading speaker diarization...'),
+                          ],
+                        )
+                      : Text(
+                          'No speaker segments available for this session.',
+                          style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                        ),
                 ),
               ),
             )

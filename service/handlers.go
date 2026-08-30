@@ -91,7 +91,11 @@ func withCORS(next http.Handler) http.Handler {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	respondJSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "omi-pixel"})
+	respondJSON(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"service": "omi-pixel",
+		"version": Version,
+	})
 }
 
 type CreateSessionRequest struct {

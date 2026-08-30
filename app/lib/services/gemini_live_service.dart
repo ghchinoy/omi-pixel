@@ -40,6 +40,7 @@ class GeminiLiveService {
   Future<bool> connect({
     required String cloudRunUrl,
     String language = 'en',
+    String mode = 'verbatim',
     String? sessionId,
   }) async {
     if (cloudRunUrl.isEmpty) {
@@ -66,6 +67,9 @@ class GeminiLiveService {
     final queryParams = <String>[];
     if (language.isNotEmpty) {
       queryParams.add('lang=$language');
+    }
+    if (mode.isNotEmpty) {
+      queryParams.add('mode=$mode');
     }
     if (sessionId != null && sessionId.isNotEmpty) {
       queryParams.add('session=$sessionId');

@@ -36,6 +36,13 @@ func TestServerHealthAndSessions(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", rec.Code)
 	}
+	var healthResp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&healthResp); err != nil {
+		t.Fatalf("Failed to decode health response: %v", err)
+	}
+	if healthResp["version"] != Version {
+		t.Errorf("Expected health version %q, got %q", Version, healthResp["version"])
+	}
 
 	// 2. Test Create Session
 	createReq := CreateSessionRequest{
@@ -145,5 +152,50 @@ func TestAuthMiddlewareEnforcement(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("Expected status 401 Unauthorized, got %d", rec.Code)
 		}
+	}
+}
+
+func TestBuildLiveSetupMessage(t *testing.T) {
+	modelPath := "projects/test-p/locations/global/publishers/google/models/gemini-3.5-transcribe-live-preview"
+
+	// 1. Default / Verbatim with english
+	msg := BuildLiveSetupMessage(modelPath, "verbatim", "en")
+	setup, ok := msg["setup"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected setup map in message: %v", msg)
+	}
+	transcription, ok := setup["inputAudioTranscription"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected inputAudioTranscription map in setup: %v", setup)
+	}
+	if transcription["mode"] != "VERBATIM" {
+		t.Errorf("Expected mode VERBATIM, got %v", transcription["mode"])
+	}
+	langCodes, ok := transcription["languageCodes"].([]string)
+	if !ok || len(langCodes) != 1 || langCodes[0] != "en-US" {
+		t.Errorf("Expected languageCodes ['en-US'], got %v", transcription["languageCodes"])
+	}
+
+	// 2. Smart mode with Spanish
+	msg = BuildLiveSetupMessage(modelPath, "smart", "es")
+	setup = msg["setup"].(map[string]interface{})
+	transcription = setup["inputAudioTranscription"].(map[string]interface{})
+	if transcription["mode"] != "SMART" {
+		t.Errorf("Expected mode SMART, got %v", transcription["mode"])
+	}
+	langCodes, ok = transcription["languageCodes"].([]string)
+	if !ok || len(langCodes) != 1 || langCodes[0] != "es-ES" {
+		t.Errorf("Expected languageCodes ['es-ES'], got %v", transcription["languageCodes"])
+	}
+
+	// 3. Unset mode and multi-language
+	msg = BuildLiveSetupMessage(modelPath, "", "multi")
+	setup = msg["setup"].(map[string]interface{})
+	transcription = setup["inputAudioTranscription"].(map[string]interface{})
+	if _, exists := transcription["mode"]; exists {
+		t.Errorf("Expected mode not set when empty, got %v", transcription["mode"])
+	}
+	if _, exists := transcription["languageCodes"]; exists {
+		t.Errorf("Expected languageCodes not set when 'multi', got %v", transcription["languageCodes"])
 	}
 }

@@ -6,7 +6,6 @@ import '../models/device.dart';
 import '../models/session.dart';
 import '../services/ble_service.dart';
 import '../services/session_manager.dart';
-import '../services/settings_service.dart';
 import 'live_screen.dart';
 import 'session_detail_screen.dart';
 import 'settings_screen.dart';
@@ -23,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     SessionManager.instance.refreshSessions();
+    BleService.instance.tryReconnectLastDevice();
   }
 
   void _showScanBottomSheet() {
@@ -39,23 +39,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _handleStartRecording() async {
-    final apiKey = SettingsService.instance.geminiApiKey;
-    if (apiKey.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please set your Gemini API Key in Settings first'),
-          action: SnackBarAction(
-            label: 'Settings',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
-          ),
-        ),
-      );
-      return;
-    }
-
     final device = BleService.instance.currentDevice;
     if (device == null || !device.isConnected) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -181,89 +164,108 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildDeviceCard(BuildContext context) {
     final theme = Theme.of(context);
 
-    return StreamBuilder<OmiDeviceInfo?>(
-      stream: BleService.instance.deviceStream,
-      initialData: BleService.instance.currentDevice,
-      builder: (context, snapshot) {
-        final device = snapshot.data;
-        final isConnected = device != null && device.isConnected;
+    return StreamBuilder<bool>(
+      stream: BleService.instance.reconnectingStream,
+      initialData: BleService.instance.isReconnecting,
+      builder: (context, reconnSnapshot) {
+        final isReconnecting = reconnSnapshot.data ?? false;
 
-        return Card(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(
-              color: isConnected ? theme.colorScheme.primary.withValues(alpha: 0.5) : theme.colorScheme.outlineVariant,
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return StreamBuilder<OmiDeviceInfo?>(
+          stream: BleService.instance.deviceStream,
+          initialData: BleService.instance.currentDevice,
+          builder: (context, snapshot) {
+            final device = snapshot.data;
+            final isConnected = device != null && device.isConnected;
+
+            return Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(
+                  color: isConnected ? theme.colorScheme.primary.withValues(alpha: 0.5) : theme.colorScheme.outlineVariant,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Icon(
-                          isConnected ? Icons.bluetooth_connected : Icons.bluetooth,
-                          color: isConnected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          isConnected ? device.name : 'No Device Connected',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
-                      ],
-                    ),
-                    if (isConnected && device.batteryLevel >= 0)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
+                        Row(
                           children: [
-                            const Icon(Icons.battery_std, size: 14, color: Colors.green),
-                            const SizedBox(width: 2),
+                            if (isReconnecting && !isConnected)
+                              const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            else
+                              Icon(
+                                isConnected ? Icons.bluetooth_connected : Icons.bluetooth,
+                                color: isConnected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                              ),
+                            const SizedBox(width: 8),
                             Text(
-                              '${device.batteryLevel}%',
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green),
+                              isConnected
+                                  ? device.name
+                                  : (isReconnecting ? 'Reconnecting to Omi...' : 'No Device Connected'),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                           ],
                         ),
+                        if (isConnected && device.batteryLevel >= 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.battery_std, size: 14, color: Colors.green),
+                                const SizedBox(width: 2),
+                                Text(
+                                  '${device.batteryLevel}%',
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (isConnected) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Codec: ${device.codec.label}',
+                        style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
                       ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () => BleService.instance.disconnect(),
+                        icon: const Icon(Icons.link_off),
+                        label: const Text('Disconnect'),
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        isReconnecting
+                            ? 'Restoring connection to previously paired wearable...'
+                            : 'Pair your Omi wearable to stream audio.',
+                        style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: isReconnecting ? null : _showScanBottomSheet,
+                        icon: const Icon(Icons.bluetooth_searching),
+                        label: const Text('Scan for Omi Device'),
+                      ),
+                    ],
                   ],
                 ),
-                if (isConnected) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Codec: ${device.codec.label}',
-                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () => BleService.instance.disconnect(),
-                    icon: const Icon(Icons.link_off),
-                    label: const Text('Disconnect'),
-                  ),
-                ] else ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Pair your Omi wearable to stream audio.',
-                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: _showScanBottomSheet,
-                    icon: const Icon(Icons.search),
-                    label: const Text('Scan for Omi Device'),
-                  ),
-                ],
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );

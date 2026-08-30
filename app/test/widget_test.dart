@@ -66,6 +66,15 @@ void main() {
       expect(parsedSession.status, SessionStatus.completed);
       expect(parsedSession.segments.first.speaker, 'Speaker 1');
     });
+
+    test('SettingsService liveTranscriptionMode defaults and saves', () async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.instance.init();
+
+      expect(SettingsService.instance.liveTranscriptionMode, 'verbatim');
+      SettingsService.instance.liveTranscriptionMode = 'smart';
+      expect(SettingsService.instance.liveTranscriptionMode, 'smart');
+    });
   });
 
   group('AudioDecoder Tests', () {

@@ -2,7 +2,7 @@ name: omi_pixel
 description: "Minimal Omi companion app for Android Pixel 11 with Gemini 3.5 Transcribe Live and diarization."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 0.2.0+2
 
 environment:
   sdk: '>=3.3.0 <4.0.0'

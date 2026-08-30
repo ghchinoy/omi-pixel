@@ -120,6 +120,7 @@ class SessionManager {
         cloudRunUrl: cloudRunUrl,
         sessionId: sessionId,
         language: SettingsService.instance.preferredLanguage,
+        mode: SettingsService.instance.liveTranscriptionMode,
       );
 
       if (connected) {
@@ -264,6 +265,10 @@ class SessionManager {
       } catch (_) {}
     }
     _sessionsController.add(_cachedSessions);
+  }
+
+  void updateCachedSession(Session session) {
+    _saveSessionLocally(session);
   }
 
   void _saveSessionLocally(Session session) {

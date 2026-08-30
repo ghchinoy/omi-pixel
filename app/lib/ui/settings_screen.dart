@@ -15,6 +15,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _cloudRunUrlController = TextEditingController();
   String _selectedLanguage = 'en';
+  String _selectedLiveMode = 'verbatim';
   bool _generateSummary = true;
   bool _testingConnection = false;
   String? _connectionStatusMessage;
@@ -26,6 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final s = SettingsService.instance;
     _cloudRunUrlController.text = s.cloudRunUrl;
     _selectedLanguage = s.preferredLanguage;
+    _selectedLiveMode = s.liveTranscriptionMode;
     _generateSummary = s.generateSummary;
   }
 
@@ -39,6 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final s = SettingsService.instance;
     s.cloudRunUrl = _cloudRunUrlController.text;
     s.preferredLanguage = _selectedLanguage;
+    s.liveTranscriptionMode = _selectedLiveMode;
     s.generateSummary = _generateSummary;
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -253,6 +256,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            isExpanded: true,
+            initialValue: _selectedLiveMode,
+            decoration: const InputDecoration(
+              labelText: 'Live Transcription Mode',
+              helperText: 'Smart mode removes filler words and disfluencies (Live streaming only)',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.tune),
+            ),
+            items: const [
+              DropdownMenuItem(
+                value: 'verbatim',
+                child: Text('Verbatim (Exact audio transcription)'),
+              ),
+              DropdownMenuItem(
+                value: 'smart',
+                child: Text('Smart (Cleaned disfluencies & grammar)'),
+              ),
+            ],
+            onChanged: (val) {
+              if (val != null) setState(() => _selectedLiveMode = val);
+            },
+          ),
+          const SizedBox(height: 16),
           DropdownButtonFormField<String>(
             isExpanded: true,
             initialValue: _selectedLanguage,

@@ -10,6 +10,7 @@ class SettingsService {
   static const String _keyBatchModel = 'batch_model';
   static const String _keyLanguage = 'preferred_language';
   static const String _keyGenerateSummary = 'generate_summary';
+  static const String _keyLiveTranscriptionMode = 'live_transcription_mode';
 
   SharedPreferences? _prefs;
 
@@ -37,6 +38,9 @@ class SettingsService {
 
   String get preferredLanguage => _prefs?.getString(_keyLanguage) ?? 'en';
   set preferredLanguage(String value) => _prefs?.setString(_keyLanguage, value.trim());
+
+  String get liveTranscriptionMode => _prefs?.getString(_keyLiveTranscriptionMode) ?? 'verbatim';
+  set liveTranscriptionMode(String value) => _prefs?.setString(_keyLiveTranscriptionMode, value.trim().toLowerCase());
 
   bool get generateSummary => _prefs?.getBool(_keyGenerateSummary) ?? true;
   set generateSummary(bool value) => _prefs?.setBool(_keyGenerateSummary, value);
