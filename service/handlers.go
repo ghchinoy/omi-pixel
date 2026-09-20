@@ -230,15 +230,17 @@ func (s *Server) handleUploadAudio(w http.ResponseWriter, r *http.Request) {
 		generateSummary = (summaryParam == "true" || summaryParam == "1")
 	}
 
-	// 4. Optionally upload to GCS
+	// 4. Optionally upload to GCS (or local in-memory audio store)
 	var gcsURI string
 	if s.audioStore != nil {
 		uri, err := s.audioStore.UploadWAV(ctx, id, audioBytes)
 		if err != nil {
-			log.Printf("[handleUploadAudio] GCS upload failed (%v), falling back to inline audio", err)
+			log.Printf("[handleUploadAudio] Audio store upload failed (%v), falling back to inline audio", err)
 		} else if uri != "" {
-			gcsURI = uri
-			session.AudioURL = gcsURI
+			session.AudioURL = uri
+			if strings.HasPrefix(uri, "gs://") {
+				gcsURI = uri
+			}
 		}
 	}
 

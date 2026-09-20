@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"log"
+	"sync"
 
 	"cloud.google.com/go/storage"
 )
@@ -97,15 +99,33 @@ func (g *GCSStore) Close() error {
 	return nil
 }
 
-// NoopAudioStore provides an in-memory/fallback store when GCS is not configured.
-type NoopAudioStore struct{}
-
-func (n *NoopAudioStore) UploadWAV(_ context.Context, _ string, _ []byte) (string, error) {
-	return "", nil
+// NoopAudioStore provides an in-memory fallback audio store when GCS is not configured.
+type NoopAudioStore struct {
+	mu    sync.RWMutex
+	files map[string][]byte
 }
 
-func (n *NoopAudioStore) DownloadWAV(_ context.Context, _ string) (io.ReadCloser, int64, error) {
-	return nil, 0, fmt.Errorf("audio storage not configured")
+func (n *NoopAudioStore) UploadWAV(_ context.Context, sessionID string, wavBytes []byte) (string, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.files == nil {
+		n.files = make(map[string][]byte)
+	}
+	copied := make([]byte, len(wavBytes))
+	copy(copied, wavBytes)
+	n.files[sessionID] = copied
+	return fmt.Sprintf("memory://sessions/%s/audio.wav", sessionID), nil
+}
+
+func (n *NoopAudioStore) DownloadWAV(_ context.Context, sessionID string) (io.ReadCloser, int64, error) {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	if n.files != nil {
+		if data, ok := n.files[sessionID]; ok {
+			return io.NopCloser(bytes.NewReader(data)), int64(len(data)), nil
+		}
+	}
+	return nil, 0, fmt.Errorf("audio not found in memory store")
 }
 
 func (n *NoopAudioStore) Close() error {
