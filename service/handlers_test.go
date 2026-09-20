@@ -176,16 +176,15 @@ func TestBuildLiveSetupMessage(t *testing.T) {
 		t.Errorf("Expected languageCodes ['en-US'], got %v", transcription["languageCodes"])
 	}
 
-	// 2. Smart mode with Spanish
+	// 2. Smart mode with Spanish (must omit languageCodes to avoid Vertex AI closeCode=1007)
 	msg = BuildLiveSetupMessage(modelPath, "smart", "es")
 	setup = msg["setup"].(map[string]interface{})
 	transcription = setup["inputAudioTranscription"].(map[string]interface{})
 	if transcription["mode"] != "SMART" {
 		t.Errorf("Expected mode SMART, got %v", transcription["mode"])
 	}
-	langCodes, ok = transcription["languageCodes"].([]string)
-	if !ok || len(langCodes) != 1 || langCodes[0] != "es-ES" {
-		t.Errorf("Expected languageCodes ['es-ES'], got %v", transcription["languageCodes"])
+	if _, exists := transcription["languageCodes"]; exists {
+		t.Errorf("Expected languageCodes to be omitted when mode is SMART, got %v", transcription["languageCodes"])
 	}
 
 	// 3. Unset mode and multi-language

@@ -63,7 +63,9 @@ func BuildLiveSetupMessage(modelPath, modeParam, langParam string) map[string]in
 	}
 
 	cleanLang := strings.TrimSpace(langParam)
-	if cleanLang != "" && cleanLang != "multi" {
+	// Vertex AI Live API rejects languageCodes when mode is SMART (closeCode=1007:
+	// "Transcription mode SMART is incompatible with language_codes").
+	if cleanLang != "" && cleanLang != "multi" && cleanMode != "SMART" {
 		inputAudioTranscription["languageCodes"] = []string{mapLanguageToBCP47(cleanLang)}
 	}
 
