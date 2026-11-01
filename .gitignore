@@ -48,3 +48,9 @@ app/android/app/google-services.json
 app/ios/Runner/GoogleService-Info.plist
 app/macos/Runner/GoogleService-Info.plist
 
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+*.gate.lock*

@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "omi_pixel",
+  "project_id": "7c053046-33e4-4d26-bf81-49f6952d3ef8"
+}
