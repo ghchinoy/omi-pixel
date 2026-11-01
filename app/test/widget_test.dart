@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:omi_pixel/models/device.dart';
@@ -65,6 +66,13 @@ void main() {
       expect(parsedSession.id, session.id);
       expect(parsedSession.status, SessionStatus.completed);
       expect(parsedSession.segments.first.speaker, 'Speaker 1');
+      expect(parsedSession.startedAt.isUtc, isFalse);
+      expect(parsedSession.createdAt.isUtc, isFalse);
+      expect(parsedSession.startedAt, DateTime.utc(2026, 8, 29, 10, 0).toLocal());
+      expect(
+        DateFormat('MMM dd, HH:mm').format(parsedSession.startedAt),
+        DateFormat('MMM dd, HH:mm').format(DateTime.utc(2026, 8, 29, 10, 0).toLocal()),
+      );
     });
 
     test('SettingsService liveTranscriptionMode defaults and saves', () async {

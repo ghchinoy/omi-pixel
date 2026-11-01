@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/segment.dart';
@@ -41,15 +41,17 @@ class ApiClient {
           'device_id': session.deviceId,
           'title': session.title,
           'language': session.language,
-          'started_at': session.startedAt.toIso8601String(),
+          'started_at': session.startedAt.toUtc().toIso8601String(),
         }),
       );
 
       if (resp.statusCode == 200 || resp.statusCode == 201) {
         return Session.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
       }
+      debugPrint('[ApiClient] createSession failed: HTTP ${resp.statusCode} ${resp.body}');
       return null;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[ApiClient] createSession error: $e');
       return null;
     }
   }
@@ -76,8 +78,10 @@ class ApiClient {
       if (resp.statusCode == 200) {
         return Session.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
       }
+      debugPrint('[ApiClient] uploadAudio failed: HTTP ${resp.statusCode} ${resp.body}');
       return null;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[ApiClient] uploadAudio error: $e');
       return null;
     }
   }
@@ -94,8 +98,10 @@ class ApiClient {
         final list = jsonDecode(resp.body) as List<dynamic>;
         return list.map((s) => Session.fromJson(s as Map<String, dynamic>)).toList();
       }
+      debugPrint('[ApiClient] listSessions failed: HTTP ${resp.statusCode} ${resp.body}');
       return [];
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[ApiClient] listSessions error: $e');
       return [];
     }
   }
@@ -111,8 +117,10 @@ class ApiClient {
       if (resp.statusCode == 200) {
         return Session.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
       }
+      debugPrint('[ApiClient] getSession($sessionId) failed: HTTP ${resp.statusCode}');
       return null;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[ApiClient] getSession($sessionId) error: $e');
       return null;
     }
   }
@@ -133,8 +141,12 @@ class ApiClient {
         }),
       );
 
+      if (resp.statusCode != 200) {
+        debugPrint('[ApiClient] saveSegments failed: HTTP ${resp.statusCode}');
+      }
       return resp.statusCode == 200;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[ApiClient] saveSegments error: $e');
       return false;
     }
   }

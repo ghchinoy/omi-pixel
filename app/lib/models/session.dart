@@ -57,11 +57,16 @@ class Session {
       status: _parseStatus(json['status'] as String?),
       language: json['language'] as String? ?? 'en',
       durationSeconds: (json['duration_seconds'] as num?)?.toDouble() ?? 0.0,
-      startedAt: DateTime.tryParse(json['started_at'] as String? ?? '') ?? DateTime.now(),
-      finishedAt: json['finished_at'] != null ? DateTime.tryParse(json['finished_at'] as String) : null,
-      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
+      startedAt: _parseLocalDateTime(json['started_at'] as String?) ?? DateTime.now(),
+      finishedAt: _parseLocalDateTime(json['finished_at'] as String?),
+      createdAt: _parseLocalDateTime(json['created_at'] as String?) ?? DateTime.now(),
       segments: segs,
     );
+  }
+
+  static DateTime? _parseLocalDateTime(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    return DateTime.tryParse(raw)?.toLocal();
   }
 
   static SessionStatus _parseStatus(String? status) {
@@ -87,9 +92,9 @@ class Session {
     'status': status.name,
     'language': language,
     'duration_seconds': durationSeconds,
-    'started_at': startedAt.toIso8601String(),
-    'finished_at': finishedAt?.toIso8601String(),
-    'created_at': createdAt.toIso8601String(),
+    'started_at': startedAt.toUtc().toIso8601String(),
+    'finished_at': finishedAt?.toUtc().toIso8601String(),
+    'created_at': createdAt.toUtc().toIso8601String(),
     'segments': segments.map((s) => s.toJson()).toList(),
   };
 

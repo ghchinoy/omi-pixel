@@ -57,7 +57,7 @@ func VertexBatchRESTURL(projectID, location, model string) string {
 		location = "global"
 	}
 	if model == "" {
-		model = "gemini-3.5-transcribe-preview"
+		model = "gemini-3.5-transcribe"
 	}
 	return fmt.Sprintf(
 		"https://aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:generateContent",
@@ -73,7 +73,7 @@ func VertexModelPath(projectID, location, model string) string {
 		location = "global"
 	}
 	if model == "" {
-		model = "gemini-3.5-transcribe-live-preview"
+		model = "gemini-3.5-transcribe-live"
 	}
 	return fmt.Sprintf("projects/%s/locations/%s/publishers/google/models/%s", projectID, location, model)
 }

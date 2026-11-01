@@ -7,11 +7,23 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
 	"omi-pixel-service/web"
 )
+
+const (
+	maxJSONBodyBytes  = 5 << 20  // 5 MB
+	maxAudioBodyBytes = 50 << 20 // 50 MB
+)
+
+var validSessionIDRe = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
+
+func isValidSessionID(id string) bool {
+	return validSessionIDRe.MatchString(id)
+}
 
 type Server struct {
 	store      Store
@@ -107,6 +119,7 @@ type CreateSessionRequest struct {
 }
 
 func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
 	var req CreateSessionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
@@ -115,9 +128,14 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 
 	if req.ID == "" {
 		req.ID = fmt.Sprintf("sess_%d", time.Now().UnixNano())
+	} else if !isValidSessionID(req.ID) {
+		http.Error(w, "invalid session id format", http.StatusBadRequest)
+		return
 	}
 	if req.StartedAt.IsZero() {
 		req.StartedAt = time.Now().UTC()
+	} else {
+		req.StartedAt = req.StartedAt.UTC()
 	}
 
 	session := &Session{
@@ -153,8 +171,8 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if id == "" {
-		http.Error(w, "missing session id", http.StatusBadRequest)
+	if !isValidSessionID(id) {
+		http.Error(w, "missing or invalid session id", http.StatusBadRequest)
 		return
 	}
 
@@ -169,11 +187,12 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUploadAudio(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if id == "" {
-		http.Error(w, "missing session id", http.StatusBadRequest)
+	if !isValidSessionID(id) {
+		http.Error(w, "missing or invalid session id", http.StatusBadRequest)
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxAudioBodyBytes)
 	ctx := r.Context()
 
 	// 1. Read existing session or create placeholder
@@ -194,7 +213,7 @@ func (s *Server) handleUploadAudio(w http.ResponseWriter, r *http.Request) {
 	contentType := r.Header.Get("Content-Type")
 
 	if strings.HasPrefix(contentType, "multipart/form-data") {
-		if err := r.ParseMultipartForm(50 << 20); err != nil { // 50MB max
+		if err := r.ParseMultipartForm(maxAudioBodyBytes); err != nil {
 			http.Error(w, "failed to parse multipart form", http.StatusBadRequest)
 			return
 		}
@@ -214,7 +233,7 @@ func (s *Server) handleUploadAudio(w http.ResponseWriter, r *http.Request) {
 		var err error
 		audioBytes, err = io.ReadAll(r.Body)
 		if err != nil {
-			http.Error(w, "failed to read raw audio body", http.StatusInternalServerError)
+			http.Error(w, "failed to read raw audio body", http.StatusRequestEntityTooLarge)
 			return
 		}
 	}
@@ -294,11 +313,12 @@ type SaveSegmentsRequest struct {
 
 func (s *Server) handleSaveSegments(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if id == "" {
-		http.Error(w, "missing session id", http.StatusBadRequest)
+	if !isValidSessionID(id) {
+		http.Error(w, "missing or invalid session id", http.StatusBadRequest)
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
 	var req SaveSegmentsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -344,8 +364,8 @@ func (s *Server) handleSaveSegments(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDownloadAudio(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if id == "" {
-		http.Error(w, "missing session id", http.StatusBadRequest)
+	if !isValidSessionID(id) {
+		http.Error(w, "missing or invalid session id", http.StatusBadRequest)
 		return
 	}
 

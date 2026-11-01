@@ -26,11 +26,24 @@ rtk tsc                 rtk lint
 `omi-pixel` is a standalone, lightweight Flutter mobile companion app and Go Cloud Run backend for Omi hardware devices (DevKit & CV1) on Google Pixel (Android).
 
 ## Architecture
-- **App (`app/`)**: Flutter app targeting Android (Pixel 11). Connects directly to Omi via BLE using `sdks/device/dart` (`omi_device`), decodes Opus audio to 16kHz PCM, streams live transcription via Cloud Run WebSocket proxy to Gemini 3.5 Transcribe Live (`gemini-3.5-transcribe-live-preview`), and uploads recorded session WAVs to Cloud Run.
-- **Backend Service (`service/`)**: Go HTTP & WebSocket service deployed on Google Cloud Run. Proxies live audio to Vertex AI Multimodal Live WebSocket and performs Gemini 3.5 Transcribe batch diarization (`gemini-3.5-transcribe-preview`) on Vertex AI with native speaker diarization, persists sessions to Firestore, and serves a responsive Web Review UI.
+- **App (`app/`)**: Flutter app targeting Android (Pixel 11). Connects directly to Omi via BLE using `sdks/device/dart` (`omi_device`), decodes Opus audio to 16kHz PCM, streams live transcription via Cloud Run WebSocket proxy to Gemini 3.5 Transcribe Live (`gemini-3.5-transcribe-live`), and uploads recorded session WAVs to Cloud Run.
+- **Backend Service (`service/`)**: Go HTTP & WebSocket service deployed on Google Cloud Run. Proxies live audio to Vertex AI Multimodal Live WebSocket and performs Gemini 3.5 Transcribe batch diarization (`gemini-3.5-transcribe`) on Vertex AI with native speaker diarization, persists sessions to Firestore, and serves a responsive Web Review UI.
 - **Infrastructure (`infra/`)**: Shell automation for GCP project enablement, Firestore provisioning, Artifact Registry, and Cloud Run deployment.
 
 ## Code Standards
 - Keep dependencies lean and minimal.
 - Mobile app uses standard Firebase Auth & Google Sign-In for access tokens; zero Firestore/Storage client SDKs on device.
 - Go backend uses standard library HTTP routing, official `cloud.google.com/go/firestore`, `cloud.google.com/go/storage`, and `firebase.google.com/go/v4` SDKs.
+
+## Issue Tracking
+
+This project uses **bd (beads)** for issue tracking.
+Run `bd prime` for workflow context, or install hooks (`bd hooks install`) for auto-injection.
+
+**Quick reference:**
+- `bd ready` - Find unblocked work
+- `bd create "Title" --type task --priority 2` - Create issue
+- `bd close <id>` - Complete work
+- `bd dolt push` - Push beads to remote
+
+For full workflow details: `bd prime`

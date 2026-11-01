@@ -14,8 +14,8 @@ import (
 func TestServerHealthAndSessions(t *testing.T) {
 	ctx := t.Context()
 	store := NewMemoryStore()
-	gemini := NewGeminiClient(nil, "test-proj", "global", "gemini-3.5-transcribe-preview", "gemini-3.5-flash-lite", "gemini-3.7-flash")
-	liveProxy := NewLiveProxy(nil, "test-proj", "global", "gemini-3.5-transcribe-live-preview")
+	gemini := NewGeminiClient(nil, "test-proj", "global", "gemini-3.5-transcribe", "gemini-3.5-flash-lite", "gemini-3.8-flash")
+	liveProxy := NewLiveProxy(nil, "test-proj", "global", "gemini-3.5-transcribe-live")
 	auth, err := NewAuthenticator(ctx, "test-proj", store, true)
 	if err != nil {
 		t.Fatalf("NewAuthenticator failed: %v", err)
@@ -156,7 +156,7 @@ func TestAuthMiddlewareEnforcement(t *testing.T) {
 }
 
 func TestBuildLiveSetupMessage(t *testing.T) {
-	modelPath := "projects/test-p/locations/global/publishers/google/models/gemini-3.5-transcribe-live-preview"
+	modelPath := "projects/test-p/locations/global/publishers/google/models/gemini-3.5-transcribe-live"
 
 	// 1. Default / Verbatim with english
 	msg := BuildLiveSetupMessage(modelPath, "verbatim", "en")
@@ -196,5 +196,27 @@ func TestBuildLiveSetupMessage(t *testing.T) {
 	}
 	if _, exists := transcription["languageCodes"]; exists {
 		t.Errorf("Expected languageCodes not set when 'multi', got %v", transcription["languageCodes"])
+	}
+}
+
+func TestSessionIDValidationAndNoopAudioStoreCap(t *testing.T) {
+	if !isValidSessionID("sess_12345-abc") {
+		t.Errorf("Expected valid session ID to pass")
+	}
+	if isValidSessionID("../etc/passwd") || isValidSessionID("sess/../../bad") || isValidSessionID("") {
+		t.Errorf("Expected path traversal or empty session ID to be rejected")
+	}
+
+	audioStore := &NoopAudioStore{}
+	ctx := t.Context()
+	for i := 0; i < maxInMemoryAudioSessions+5; i++ {
+		id := "sess_" + string(rune('a'+i))
+		_, err := audioStore.UploadWAV(ctx, id, []byte("RIFF0000WAVEfmt "))
+		if err != nil {
+			t.Fatalf("UploadWAV failed: %v", err)
+		}
+	}
+	if len(audioStore.files) != maxInMemoryAudioSessions {
+		t.Errorf("Expected NoopAudioStore to cap at %d sessions, got %d", maxInMemoryAudioSessions, len(audioStore.files))
 	}
 }

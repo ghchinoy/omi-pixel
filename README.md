@@ -1,12 +1,12 @@
 # 🎙️ Omi-Pixel
 
-[![Version](https://img.shields.io/badge/version-0.2.0-38bdf8?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-38bdf8?style=flat-square)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Google%20Pixel%20%7C%20Android-22c55e?style=flat-square)](#supported-hardware--audio-codecs)
-[![Backend](https://img.shields.io/badge/backend-Go%201.25%20%7C%20Cloud%20Run-0284c7?style=flat-square)](#architecture)
-[![AI](https://img.shields.io/badge/Vertex%20AI-Gemini%203.5%20Transcribe%20%2B%203.7%20Flash-6366f1?style=flat-square)](#why-omi-pixel)
+[![Backend](https://img.shields.io/badge/backend-Go%201.26%20%7C%20Cloud%20Run-0284c7?style=flat-square)](#architecture)
+[![AI](https://img.shields.io/badge/Vertex%20AI-Gemini%203.5%20Transcribe%20%2B%203.8%20Flash-6366f1?style=flat-square)](#why-omi-pixel)
 [![License: MIT](https://img.shields.io/badge/license-MIT-94a3b8?style=flat-square)](LICENSE)
 
-A standalone, self-hosted **Flutter companion app for Google Pixel** and **Go Cloud Run backend** for **Omi wearable hardware (DevKit & CV1)**—combining sub-second live speech streaming via **Gemini 3.5 Transcribe Live** with post-session multi-speaker diarization (**Gemini 3.5 Transcribe**), AI synthesis (**Gemini 3.7 Flash**), and synchronized 16kHz WAV playback.
+A standalone, self-hosted **Flutter companion app for Google Pixel** and **Go Cloud Run backend** for **Omi wearable hardware (DevKit & CV1)**—combining sub-second live speech streaming via **Gemini 3.5 Transcribe Live** with post-session multi-speaker diarization (**Gemini 3.5 Transcribe**), AI synthesis (**Gemini 3.8 Flash**), and synchronized 16kHz WAV playback.
 
 ---
 
@@ -14,8 +14,8 @@ A standalone, self-hosted **Flutter companion app for Google Pixel** and **Go Cl
 
 - **🔒 100% Private, Self-Hosted Cloud**: Your raw audio and transcripts live exclusively in *your* Google Cloud project (Firestore + Cloud Storage) behind your personal Google account allowlist—zero third-party SaaS telemetry.
 - **⚡ Two-Pass Gemini 3.5 Pipeline**:
-  - **Pass 1 (Real-Time UX)**: Streams 16kHz mono PCM over WebSocket to `gemini-3.5-transcribe-live-preview` for instant verbatim or smart transcription while you speak.
-  - **Pass 2 (Diarized Truth & Synthesis)**: Uploads the full 16kHz session WAV to Cloud Storage, separates speakers (`Speaker 1`, `Speaker 2`, …) with word-level timestamps via `gemini-3.5-transcribe-preview`, and synthesizes titles (`gemini-3.5-flash-lite`) and takeaways (`gemini-3.7-flash`).
+  - **Pass 1 (Real-Time UX)**: Streams 16kHz mono PCM over WebSocket to `gemini-3.5-transcribe-live` for instant verbatim or smart transcription while you speak.
+  - **Pass 2 (Diarized Truth & Synthesis)**: Uploads the full 16kHz session WAV to Cloud Storage, separates speakers (`Speaker 1`, `Speaker 2`, …) with word-level timestamps via `gemini-3.5-transcribe`, and synthesizes titles (`gemini-3.5-flash-lite`) and takeaways (`gemini-3.8-flash`).
 - **🔋 Featherweight Pixel Companion**: Native `libopus` decoding (`Codec 20` & `Codec 21`), BLE auto-reconnect, and zero bloated cloud storage SDKs on the phone.
 - **⏯️ Tap-to-Seek Audio Review (Mobile & Web)**: Tap any speaker turn card on your phone or in the responsive Web Review Dashboard to seek the 16kHz WAV player directly to that timestamp.
 
@@ -31,7 +31,7 @@ A standalone, self-hosted **Flutter companion app for Google Pixel** and **Go Cl
 | 1. Connect & Auto-Reconnect | 2. Live Verbatim Stream | 3. Diarized Turns & Tap-to-Seek |
 | :---: | :---: | :---: |
 | <img src="docs/screenshots/mobile-home.webp" width="260" alt="Omi Pixel Home Screen"> | <img src="docs/screenshots/mobile-live.webp" width="260" alt="Omi Pixel Live Transcription"> | <img src="docs/screenshots/mobile-detail.webp" width="260" alt="Omi Pixel Diarized Detail"> |
-| *BLE status, battery level, & synced history* | *Sub-second `gemini-3.5-transcribe-live-preview`* | *Speaker chips, Gemini 3.7 summary, & WAV seek* |
+| *BLE status, battery level, & synced history* | *Sub-second `gemini-3.5-transcribe-live`* | *Speaker chips, Gemini 3.8 summary, & WAV seek* |
 
 <p align="center">
   <img src="docs/screenshots/live-demo.gif" width="320" alt="Omi Pixel Workflow Demo GIF">
@@ -108,7 +108,7 @@ make run-app
 1. **Configure Service URL**: Open **Settings** (⚙️) in the app. Sign in with your authorized Google account, enter your Cloud Run URL (or `http://localhost:8080` via `make adb-reverse`), choose **Verbatim** or **Smart** live transcription mode, and tap **Test Connection**.
 2. **Connect Wearable**: Turn on your Omi device and tap **Scan for Omi Device**. Once paired, Omi-Pixel remembers your wearable ID and automatically reconnects on future launches.
 3. **Record & Stream**: Tap **Start Conversation**. Speech is decoded from BLE Opus packets to 16kHz PCM and streamed to Gemini 3.5 Transcribe Live for real-time display.
-4. **Diarize & Review**: Tap **Finish Recording & Diarize**. The full session WAV is uploaded to Cloud Storage, diarized by speaker on Vertex AI, summarized by Gemini 3.7 Flash, and saved to Firestore.
+4. **Diarize & Review**: Tap **Finish Recording & Diarize**. The full session WAV is uploaded to Cloud Storage, diarized by speaker on Vertex AI, summarized by Gemini 3.8 Flash, and saved to Firestore.
 5. **Listen & Seek**: Tap any speaker turn card on your phone or in the Web Review Dashboard to play the recording from that exact timestamp.
 
 ---
@@ -145,7 +145,7 @@ omi-pixel/
 ├── service/                    # Go Cloud Run backend service
 │   ├── main.go                 # HTTP server & environment configuration
 │   ├── live.go                 # Bidirectional Vertex AI Live WebSocket proxy (/api/live)
-│   ├── gemini.go               # Gemini 3.5 Transcribe diarization & 3.7 Flash summary client
+│   ├── gemini.go               # Gemini 3.5 Transcribe diarization & 3.8 Flash summary client
 │   ├── auth.go                 # Firebase ID token verification & Firestore allowlist middleware
 │   ├── store.go                # Firestore persistence adapter with in-memory fallback
 │   ├── storage.go              # Google Cloud Storage WAV store with in-memory fallback

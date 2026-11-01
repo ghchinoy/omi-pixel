@@ -147,7 +147,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   void _copyTranscript(BuildContext context) {
     final buffer = StringBuffer();
     buffer.writeln('Title: ${_session.title}');
-    buffer.writeln('Date: ${DateFormat('yyyy-MM-dd HH:mm').format(_session.startedAt)}');
+    buffer.writeln('Date: ${DateFormat('yyyy-MM-dd HH:mm').format(_session.startedAt.toLocal())}');
     if (_session.summary.isNotEmpty) {
       buffer.writeln('\nSummary:\n${_session.summary}\n');
     }
@@ -212,7 +212,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                       Icon(Icons.calendar_today, size: 14, color: theme.colorScheme.onSurfaceVariant),
                       const SizedBox(width: 4),
                       Text(
-                        dateFormat.format(session.startedAt),
+                        dateFormat.format(session.startedAt.toLocal()),
                         style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                       ),
                       const SizedBox(width: 16),
@@ -352,7 +352,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                       Icon(Icons.auto_awesome, size: 18, color: theme.colorScheme.primary),
                       const SizedBox(width: 8),
                       Text(
-                        'Gemini 3.7 Flash Summary',
+                        'Gemini 3.8 Flash Summary',
                         style: theme.textTheme.titleSmall?.copyWith(
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.bold,

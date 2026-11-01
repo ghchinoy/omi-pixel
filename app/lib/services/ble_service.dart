@@ -52,10 +52,10 @@ class BleService {
     return true;
   }
 
-  Stream<List<OmiDeviceInfo>> scanDevicesStream({Duration timeout = const Duration(seconds: 8)}) {
-    requestPermissions();
+  Stream<List<OmiDeviceInfo>> scanDevicesStream({Duration timeout = const Duration(seconds: 8)}) async* {
+    await requestPermissions();
 
-    return _bleClient.scanStream(timeout: timeout).map((devices) {
+    yield* _bleClient.scanStream(timeout: timeout).map((devices) {
       return devices.map((d) => OmiDeviceInfo(
         id: d.id,
         name: d.name.isNotEmpty ? d.name : 'Omi Device',

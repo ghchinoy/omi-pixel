@@ -362,7 +362,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Row(
                 children: [
                   Text(
-                    dateFormat.format(session.startedAt),
+                    dateFormat.format(session.startedAt.toLocal()),
                     style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 12),
                   ),
                   if (session.durationSeconds > 0) ...[

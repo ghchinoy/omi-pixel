@@ -25,7 +25,7 @@ func NewLiveProxy(auth *VertexAuth, projectID, location, liveModel string) *Live
 		location = "global"
 	}
 	if liveModel == "" {
-		liveModel = "gemini-3.5-transcribe-live-preview"
+		liveModel = "gemini-3.5-transcribe-live"
 	}
 	return &LiveProxy{
 		vertexAuth: auth,
@@ -102,6 +102,7 @@ func (lp *LiveProxy) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer clientConn.Close(websocket.StatusNormalClosure, "session closed")
+	clientConn.SetReadLimit(1 << 20) // 1MB read limit for audio frames
 
 	// 2. Fetch OAuth Token for Vertex
 	token, err := lp.vertexAuth.Token(ctx)
@@ -136,6 +137,7 @@ func (lp *LiveProxy) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer vertexConn.Close(websocket.StatusNormalClosure, "closing upstream")
+	vertexConn.SetReadLimit(1 << 20) // 1MB read limit for upstream Vertex messages
 
 	log.Printf("[LiveProxy] Connected to Vertex AI Live API for model %s", modelPath)
 

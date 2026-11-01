@@ -247,8 +247,8 @@ const spaTemplate = `
   </style>
 
   <!-- Firebase App & Auth SDKs (Compat) -->
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/13.1.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/13.1.0/firebase-auth-compat.js"></script>
 </head>
 <body>
   <div class="container">
@@ -452,7 +452,8 @@ const spaTemplate = `
 
         for (let i = 0; i < sessions.length; i++) {
           const s = sessions[i];
-          const dateStr = s.created_at ? new Date(s.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
+          const ts = s.started_at || s.created_at;
+          const dateStr = ts ? new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
           const durStr = s.duration_seconds > 0 ? Math.round(s.duration_seconds) + "s" : "";
           html += '<div class="card" onclick="navigate(\'/sessions/' + escapeHtml(s.id) + '\')">' +
             '<div class="card-title">' +
@@ -488,7 +489,8 @@ const spaTemplate = `
         const s = detail.Session || detail;
         const segs = detail.segments || [];
 
-        const dateStr = s.created_at ? new Date(s.created_at).toLocaleString() : "-";
+        const ts = s.started_at || s.created_at;
+        const dateStr = ts ? new Date(ts).toLocaleString() : "-";
         const durStr = s.duration_seconds > 0 ? s.duration_seconds.toFixed(1) + "s" : "";
 
         let html = '<div style="margin-bottom: 1.5rem;">' +
@@ -517,7 +519,7 @@ const spaTemplate = `
 
         if (s.summary) {
           html += '<div class="summary-box">' +
-            '<strong>✨ Gemini 3.7 Flash Summary</strong>' +
+            '<strong>✨ Gemini 3.8 Flash Summary</strong>' +
             '<p style="margin-top:0.5rem; line-height:1.5;">' + escapeHtml(s.summary) + '</p>' +
             '</div>';
         }

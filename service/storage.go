@@ -99,10 +99,13 @@ func (g *GCSStore) Close() error {
 	return nil
 }
 
-// NoopAudioStore provides an in-memory fallback audio store when GCS is not configured.
+// NoopAudioStore provides a bounded in-memory fallback audio store when GCS is not configured.
+const maxInMemoryAudioSessions = 20
+
 type NoopAudioStore struct {
 	mu    sync.RWMutex
 	files map[string][]byte
+	order []string
 }
 
 func (n *NoopAudioStore) UploadWAV(_ context.Context, sessionID string, wavBytes []byte) (string, error) {
@@ -110,6 +113,14 @@ func (n *NoopAudioStore) UploadWAV(_ context.Context, sessionID string, wavBytes
 	defer n.mu.Unlock()
 	if n.files == nil {
 		n.files = make(map[string][]byte)
+	}
+	if _, exists := n.files[sessionID]; !exists {
+		if len(n.order) >= maxInMemoryAudioSessions {
+			evictID := n.order[0]
+			n.order = n.order[1:]
+			delete(n.files, evictID)
+		}
+		n.order = append(n.order, sessionID)
 	}
 	copied := make([]byte, len(wavBytes))
 	copy(copied, wavBytes)

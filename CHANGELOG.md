@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-01
+
+### Added
+- **Settings Version Display & `install-apk` Target**: Added app and Cloud Run backend version readout (`App v0.3.0+3 • Backend v0.3.0`) to `SettingsScreen` and added `make install-apk` target to `Makefile`.
+
+### Changed
+- **Vertex AI GA Gemini Models**: Upgraded defaults from preview/deprecated models to latest Vertex AI GA releases (`gemini-3.5-transcribe-live`, `gemini-3.5-transcribe`, and `gemini-3.8-flash`).
+- **Dependency Security Upgrades**: Upgraded Go backend to Go 1.26.0 and latest Cloud/Firebase/gRPC/crypto packages, Web SPA Firebase JS SDK to `13.1.0`, and Flutter app dependencies (`firebase_core ^5.1.0`, `firebase_auth ^7.0.1`, `google_sign_in ^7.2.0`, `flutter_blue_plus ^2.3.14`, `flutter_foreground_task ^11.0.3`, `permission_handler ^13.0.2`, `intl ^0.20.3`).
+- **Backend Security & Reliability Hardening**: Added session ID validation, `http.MaxBytesReader` request limits, Firestore `SaveSegments` batch chunking, 1MB WebSocket read limits, bounded `NoopAudioStore` FIFO eviction, and filtered out internal `thought` parts in `GeminiClient.generateText`.
+
+### Fixed
+- **Device Local Timezone Display**: Converted RFC3339 UTC timestamps (`started_at`, `finished_at`, `created_at`) to local device time via `.toLocal()` in `Session.fromJson` and UI formatters so conversation times render in local time instead of UTC.
+- **Multi-Language Auto-Detection in Batch Diarization**: Omitted `languageCodes` when `language == "multi"` in `DiarizeAudio` so Gemini 3.5 Transcribe auto-detects across 85+ spoken languages.
+- **BLE Scan Permission Race**: Awaited `requestPermissions()` before starting BLE scan stream in `BleService.scanDevicesStream`.
+
 ## [0.2.0] - 2026-08-29
 
 ### Added
@@ -35,6 +50,7 @@ _Initial release._
 - Audio playback cards with turn tap-to-seek synchronization on both mobile and web clients.
 - Infrastructure automation scripts (`infra/`) and top-level `Makefile`.
 
-[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/ghchinoy/omi-pixel/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ghchinoy/omi-pixel/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ghchinoy/omi-pixel/releases/tag/v0.1.0

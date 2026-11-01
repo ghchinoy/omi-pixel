@@ -4,7 +4,6 @@ class SettingsService {
   static final SettingsService instance = SettingsService._();
   SettingsService._();
 
-  static const String _keyGeminiApiKey = 'gemini_api_key';
   static const String _keyCloudRunUrl = 'cloud_run_url';
   static const String _keyLiveModel = 'live_model';
   static const String _keyBatchModel = 'batch_model';
@@ -18,9 +17,6 @@ class SettingsService {
     _prefs = await SharedPreferences.getInstance();
   }
 
-  String get geminiApiKey => _prefs?.getString(_keyGeminiApiKey) ?? '';
-  set geminiApiKey(String value) => _prefs?.setString(_keyGeminiApiKey, value.trim());
-
   String get cloudRunUrl => _prefs?.getString(_keyCloudRunUrl) ?? '';
   set cloudRunUrl(String value) {
     var url = value.trim();
@@ -30,10 +26,10 @@ class SettingsService {
     _prefs?.setString(_keyCloudRunUrl, url);
   }
 
-  String get liveModel => _prefs?.getString(_keyLiveModel) ?? 'gemini-3.5-transcribe-live-preview';
+  String get liveModel => _prefs?.getString(_keyLiveModel) ?? 'gemini-3.5-transcribe-live';
   set liveModel(String value) => _prefs?.setString(_keyLiveModel, value.trim());
 
-  String get batchModel => _prefs?.getString(_keyBatchModel) ?? 'gemini-3.5-transcribe-preview';
+  String get batchModel => _prefs?.getString(_keyBatchModel) ?? 'gemini-3.5-transcribe';
   set batchModel(String value) => _prefs?.setString(_keyBatchModel, value.trim());
 
   String get preferredLanguage => _prefs?.getString(_keyLanguage) ?? 'en';

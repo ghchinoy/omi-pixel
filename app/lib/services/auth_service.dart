@@ -12,6 +12,7 @@ class AuthService {
 
   bool _isAvailable = false;
   bool get isAvailable => _isAvailable;
+  bool _googleSignInInitialized = false;
 
   FirebaseAuth? get _auth {
     if (!_isAvailable) return null;
@@ -67,16 +68,25 @@ class AuthService {
     }
 
     try {
-      final googleSignIn = GoogleSignIn();
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-      if (googleUser == null) {
-        // User canceled the sign-in dialog
-        return null;
+      final googleSignIn = GoogleSignIn.instance;
+      if (!_googleSignInInitialized) {
+        await googleSignIn.initialize();
+        _googleSignInInitialized = true;
       }
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAccount googleUser;
+      try {
+        googleUser = await googleSignIn.authenticate();
+      } on GoogleSignInException catch (e) {
+        if (e.code == GoogleSignInExceptionCode.canceled) {
+          // User canceled the sign-in dialog
+          return null;
+        }
+        rethrow;
+      }
+
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
       final OAuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
@@ -97,7 +107,9 @@ class AuthService {
   /// Signs out of Firebase and Google.
   Future<void> signOut() async {
     try {
-      await GoogleSignIn().signOut();
+      if (_googleSignInInitialized) {
+        await GoogleSignIn.instance.signOut();
+      }
       await _auth?.signOut();
       debugPrint('[AuthService] User signed out');
     } catch (e) {

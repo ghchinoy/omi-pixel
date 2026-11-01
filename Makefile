@@ -14,10 +14,17 @@ FIRESTORE_DATABASE ?= omi-pixel
 GCS_BUCKET ?= $(GOOGLE_CLOUD_PROJECT)-omi-pixel-audio
 FIREBASE_API_KEY ?=
 FIREBASE_APP_ID ?=
+FIREBASE_ANDROID_API_KEY ?= $(FIREBASE_API_KEY)
+FIREBASE_ANDROID_APP_ID ?= $(FIREBASE_APP_ID)
 FIREBASE_MESSAGING_SENDER_ID ?=
 PORT ?= 8080
 
-.PHONY: help run-local run-local-noauth run-app adb-reverse configure-firebase authorize deauthorize setup preflight deploy postflight release test analyze build-apk icons clean
+DART_DEFINES := --dart-define=FIREBASE_PROJECT_ID=$(GOOGLE_CLOUD_PROJECT) \
+	--dart-define=FIREBASE_API_KEY=$(FIREBASE_ANDROID_API_KEY) \
+	--dart-define=FIREBASE_APP_ID=$(FIREBASE_ANDROID_APP_ID) \
+	--dart-define=FIREBASE_MESSAGING_SENDER_ID=$(FIREBASE_MESSAGING_SENDER_ID)
+
+.PHONY: help run-local run-local-noauth run-app adb-reverse configure-firebase authorize deauthorize setup preflight deploy postflight release test analyze build-apk install-apk icons clean
 
 ## help: Display this help message
 help:
@@ -45,9 +52,10 @@ help:
 	@echo ""
 	@echo "Quality & Testing:"
 	@echo "  make test              Run unit tests for Go backend and Flutter app"
-	@echo "  make analyze           Run linter and static analysis on Go and Flutter"
-	@echo "  make build-apk         Build release Android APK (app-release.apk)"
-	@echo "  make icons             Regenerate all Android/iOS app launcher icons"
+	@echo "  make analyze             Run linter and static analysis on Go and Flutter"
+	@echo "  make build-apk           Build release Android APK (app-release.apk)"
+	@echo "  make install-apk         Build and install release APK onto connected Pixel"
+	@echo "  make icons               Regenerate all Android/iOS app launcher icons"
 	@echo ""
 
 ## run-local: Run Go backend locally with Firebase Auth and ADC Vertex AI
@@ -80,7 +88,7 @@ run-local-noauth:
 ## run-app: Run Flutter companion app on connected device/emulator
 run-app:
 	@echo "==> Running Flutter companion app on connected device..."
-	cd app && flutter run
+	cd app && flutter run $(DART_DEFINES)
 
 ## configure-firebase: Run flutterfire configure for GOOGLE_CLOUD_PROJECT
 configure-firebase:
@@ -151,8 +159,14 @@ analyze:
 ## build-apk: Build standalone release APK for Google Pixel sideloading
 build-apk:
 	@echo "==> Building Flutter release APK..."
-	cd app && flutter build apk --release
+	cd app && flutter build apk --release $(DART_DEFINES)
 	@echo "✓ Release APK: app/build/app/outputs/flutter-apk/app-release.apk"
+
+## install-apk: Build release APK and install onto connected Android Pixel via ADB
+install-apk: build-apk
+	@echo "==> Installing release APK onto connected Pixel via ADB..."
+	adb install -r app/build/app/outputs/flutter-apk/app-release.apk
+	@echo "✓ Installed Omi-Pixel onto connected device"
 
 ## icons: Regenerate app launcher icons from master asset
 icons:

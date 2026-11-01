@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -6,6 +7,8 @@ import '../services/settings_service.dart';
 import 'login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
+  static const String appVersion = '0.3.0+3';
+
   const SettingsScreen({super.key});
 
   @override
@@ -20,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _testingConnection = false;
   String? _connectionStatusMessage;
   bool _connectionSuccess = false;
+  String? _backendVersion;
 
   @override
   void initState() {
@@ -29,6 +33,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _selectedLanguage = s.preferredLanguage;
     _selectedLiveMode = s.liveTranscriptionMode;
     _generateSummary = s.generateSummary;
+    if (s.cloudRunUrl.isNotEmpty) {
+      _fetchBackendVersion(s.cloudRunUrl);
+    }
+  }
+
+  Future<void> _fetchBackendVersion(String baseUrl) async {
+    try {
+      var endpoint = baseUrl.trim();
+      while (endpoint.endsWith('/')) {
+        endpoint = endpoint.substring(0, endpoint.length - 1);
+      }
+      final resp = await http.get(Uri.parse('$endpoint/api/health')).timeout(const Duration(seconds: 5));
+      if (resp.statusCode == 200 && mounted) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final ver = data['version'] as String?;
+        if (ver != null && ver.isNotEmpty) {
+          setState(() {
+            _backendVersion = ver;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -74,8 +100,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
       final resp = await http.get(Uri.parse('$endpoint/api/health')).timeout(const Duration(seconds: 6));
       if (resp.statusCode == 200) {
+        String? ver;
+        try {
+          final data = jsonDecode(resp.body) as Map<String, dynamic>;
+          ver = data['version'] as String?;
+        } catch (_) {}
         setState(() {
-          _connectionStatusMessage = 'Cloud Run service reachable!';
+          _backendVersion = ver ?? _backendVersion;
+          _connectionStatusMessage = ver != null
+              ? 'Cloud Run service reachable! (v$ver)'
+              : 'Cloud Run service reachable!';
           _connectionSuccess = true;
         });
       } else {
@@ -216,13 +250,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const ListTile(
             leading: Icon(Icons.stream),
             title: Text('Live Streaming Model'),
-            subtitle: Text('gemini-3.5-transcribe-live-preview (Global)'),
+            subtitle: Text('gemini-3.5-transcribe-live (Global)'),
             dense: true,
           ),
           const ListTile(
             leading: Icon(Icons.people),
             title: Text('Batch Diarization Model'),
-            subtitle: Text('gemini-3.5-transcribe-preview (Global)'),
+            subtitle: Text('gemini-3.5-transcribe (Global)'),
             dense: true,
           ),
           const ListTile(
@@ -234,13 +268,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const ListTile(
             leading: Icon(Icons.summarize),
             title: Text('Summary Generation Model'),
-            subtitle: Text('gemini-3.7-flash (Global)'),
+            subtitle: Text('gemini-3.8-flash (Global)'),
             dense: true,
           ),
           const SizedBox(height: 8),
           SwitchListTile(
             title: const Text('Generate AI Summary'),
-            subtitle: const Text('Uses Gemini 3.7 Flash after batch diarization completes'),
+            subtitle: const Text('Uses Gemini 3.8 Flash after batch diarization completes'),
             value: _generateSummary,
             onChanged: (val) => setState(() => _generateSummary = val),
             secondary: const Icon(Icons.auto_awesome),
@@ -309,6 +343,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
             icon: const Icon(Icons.save),
             label: const Text('Save Settings'),
+          ),
+          const SizedBox(height: 24),
+          const Divider(),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('Omi Pixel Version'),
+            subtitle: Text(
+              _backendVersion != null
+                  ? 'App v${SettingsScreen.appVersion} • Backend v$_backendVersion'
+                  : 'App v${SettingsScreen.appVersion}',
+            ),
+            dense: true,
           ),
         ],
       ),

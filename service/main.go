@@ -27,11 +27,11 @@ func main() {
 	}
 	geminiModel := os.Getenv("GEMINI_MODEL")
 	if geminiModel == "" {
-		geminiModel = "gemini-3.5-transcribe-preview"
+		geminiModel = "gemini-3.5-transcribe"
 	}
 	liveModel := os.Getenv("GEMINI_LIVE_MODEL")
 	if liveModel == "" {
-		liveModel = "gemini-3.5-transcribe-live-preview"
+		liveModel = "gemini-3.5-transcribe-live"
 	}
 	titleModel := os.Getenv("TITLE_MODEL")
 	if titleModel == "" {
@@ -39,7 +39,7 @@ func main() {
 	}
 	summaryModel := os.Getenv("SUMMARY_MODEL")
 	if summaryModel == "" {
-		summaryModel = "gemini-3.7-flash"
+		summaryModel = "gemini-3.8-flash"
 	}
 
 	gcsBucket := os.Getenv("GCS_BUCKET")

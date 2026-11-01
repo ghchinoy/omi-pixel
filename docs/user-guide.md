@@ -8,9 +8,9 @@ This guide walks you through configuring, running, and deploying the Omi-Pixel c
 
 Omi-Pixel connects your Omi hardware wearable directly to your Google Pixel phone, streaming low-latency linear PCM audio to Google Cloud for real-time live transcription, structured multi-speaker diarization, and cloud persistence:
 
-- **Live Streaming Pass**: `gemini-3.5-transcribe-live-preview` (Vertex AI Live WebSocket proxy) for instantaneous visual transcription without conversational AI interference.
-- **Batch Diarization Pass**: `gemini-3.5-transcribe-preview` (Vertex AI REST with word timestamps) for speaker separation (`Speaker 1`, `Speaker 2`).
-- **Metadata & Synthesis**: `gemini-3.5-flash-lite` for conversation title generation and `gemini-3.7-flash` for summary synthesis.
+- **Live Streaming Pass**: `gemini-3.5-transcribe-live` (Vertex AI Live WebSocket proxy) for instantaneous visual transcription without conversational AI interference.
+- **Batch Diarization Pass**: `gemini-3.5-transcribe` (Vertex AI REST with word timestamps) for speaker separation (`Speaker 1`, `Speaker 2`).
+- **Metadata & Synthesis**: `gemini-3.5-flash-lite` for conversation title generation and `gemini-3.8-flash` for summary synthesis.
 - **Audio Persistence**: Google Cloud Storage (`gs://${GOOGLE_CLOUD_PROJECT}-omi-pixel-audio`).
 - **Database**: Google Cloud Firestore named database (`omi-pixel`) with `authorized_users` allowlist security.
 

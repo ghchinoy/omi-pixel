@@ -246,14 +246,24 @@ func (f *FirestoreStore) ListSessions(ctx context.Context, limit int) ([]*Sessio
 }
 
 func (f *FirestoreStore) SaveSegments(ctx context.Context, sessionID string, segs []Segment) error {
-	col := f.client.Collection("omi_sessions").Doc(sessionID).Collection("segments")
-	batch := f.client.Batch()
-	for i, seg := range segs {
-		docRef := col.Doc(fmt.Sprintf("%05d", i))
-		batch.Set(docRef, seg)
+	if len(segs) == 0 {
+		return nil
 	}
-	if _, err := batch.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to batch write segments: %w", err)
+	col := f.client.Collection("omi_sessions").Doc(sessionID).Collection("segments")
+	const maxBatchSize = 450
+	for start := 0; start < len(segs); start += maxBatchSize {
+		end := start + maxBatchSize
+		if end > len(segs) {
+			end = len(segs)
+		}
+		batch := f.client.Batch()
+		for i := start; i < end; i++ {
+			docRef := col.Doc(fmt.Sprintf("%05d", i))
+			batch.Set(docRef, segs[i])
+		}
+		if _, err := batch.Commit(ctx); err != nil {
+			return fmt.Errorf("failed to batch write segments: %w", err)
+		}
 	}
 	return nil
 }

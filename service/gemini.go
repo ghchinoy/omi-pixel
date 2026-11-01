@@ -28,13 +28,13 @@ func NewGeminiClient(auth *VertexAuth, projectID, location, transcribeModel, tit
 		location = "global"
 	}
 	if transcribeModel == "" {
-		transcribeModel = "gemini-3.5-transcribe-preview"
+		transcribeModel = "gemini-3.5-transcribe"
 	}
 	if titleModel == "" {
 		titleModel = "gemini-3.5-flash-lite"
 	}
 	if summaryModel == "" {
-		summaryModel = "gemini-3.7-flash"
+		summaryModel = "gemini-3.8-flash"
 	}
 	return &GeminiClient{
 		vertexAuth:      auth,
@@ -119,7 +119,7 @@ type vertexGenerateResponse struct {
 
 // DiarizeAudio performs Vertex AI Gemini 3.5 Transcribe audio transcription & speaker diarization,
 // accepting either a gcsURI (gs://bucket/path) or raw WAV bytes (inlineData fallback),
-// followed by AI title (gemini-3.5-flash-lite) and optional AI summary (gemini-3.7-flash).
+// followed by AI title (gemini-3.5-flash-lite) and optional AI summary (gemini-3.8-flash).
 func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, gcsURI string, language string, generateSummary bool) (*DiarizedResult, error) {
 	if g.vertexAuth == nil {
 		return nil, fmt.Errorf("vertex auth credentials not initialized")
@@ -133,9 +133,12 @@ func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, g
 		return nil, fmt.Errorf("failed to obtain vertex oauth token: %w", err)
 	}
 
-	langCodes := []string{"en-US"}
-	if language != "" && language != "multi" {
-		langCodes = []string{mapLanguageToBCP47(language)}
+	var langCodes []string
+	cleanLang := strings.TrimSpace(language)
+	if cleanLang == "" {
+		langCodes = []string{"en-US"}
+	} else if !strings.EqualFold(cleanLang, "multi") {
+		langCodes = []string{mapLanguageToBCP47(cleanLang)}
 	}
 
 	var audioPart vertexPart
@@ -288,7 +291,7 @@ func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, g
 		title = deriveTitleFromTranscript(fullTranscript.String())
 	}
 
-	// 2. Generate Summary with gemini-3.7-flash if requested
+	// 2. Generate Summary with gemini-3.8-flash if requested
 	summary := ""
 	if generateSummary && transcriptBody != "" && g.summaryModel != "" {
 		summaryPrompt := fmt.Sprintf("Provide a clear, concise 2 to 4 sentence summary of the key discussion points and takeaways from this conversation transcript.\n\nTranscript:\n%s", transcriptBody)
@@ -368,7 +371,8 @@ func (g *GeminiClient) generateText(ctx context.Context, model, prompt, thinking
 		Candidates []struct {
 			Content struct {
 				Parts []struct {
-					Text string `json:"text"`
+					Text    string `json:"text"`
+					Thought bool   `json:"thought"`
 				} `json:"parts"`
 			} `json:"content"`
 		} `json:"candidates"`
@@ -382,9 +386,12 @@ func (g *GeminiClient) generateText(ctx context.Context, model, prompt, thinking
 		return "", fmt.Errorf("no candidates returned")
 	}
 
-	// Concatenate all text parts (handles models with thinking/thought parts)
+	// Concatenate non-thought text parts (skipping internal reasoning parts when thinking is enabled)
 	var sb strings.Builder
 	for _, p := range vResp.Candidates[0].Content.Parts {
+		if p.Thought {
+			continue
+		}
 		if t := strings.TrimSpace(p.Text); t != "" {
 			if sb.Len() > 0 {
 				sb.WriteString(" ")

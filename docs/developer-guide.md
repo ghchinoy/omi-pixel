@@ -14,9 +14,9 @@ The architecture contains three core tiers:
 
 1. **Client Tier (Flutter on Android Pixel 11)**: Connects to Omi wearable hardware via Bluetooth Low Energy (GATT), strips transport packet framing, decodes compressed Opus audio into 16kHz linear PCM, streams audio to Cloud Run Live proxy, and accumulates session audio.
 2. **AI Provider Tier (Google Cloud Vertex AI)**: 
-   - **Pass 1 (Streaming)**: `gemini-3.5-transcribe-live-preview` via Vertex Live WebSocket proxy for instantaneous, verbatim visual feedback without conversational AI commentary.
-   - **Pass 2 (Batch Diarization)**: `gemini-3.5-transcribe-preview` via Vertex REST with native `audioTranscriptionConfig{diarization: true, wordTimestamp: true}`.
-   - **Pass 3 (Title & Summary)**: `gemini-3.5-flash-lite` for concise title generation and `gemini-3.7-flash` (thinkingLevel: LOW) for session summarization.
+   - **Pass 1 (Streaming)**: `gemini-3.5-transcribe-live` via Vertex Live WebSocket proxy for instantaneous, verbatim visual feedback without conversational AI commentary.
+   - **Pass 2 (Batch Diarization)**: `gemini-3.5-transcribe` via Vertex REST with native `audioTranscriptionConfig{diarization: true, wordTimestamp: true}`.
+   - **Pass 3 (Title & Summary)**: `gemini-3.5-flash-lite` for concise title generation and `gemini-3.8-flash` (thinkingLevel: LOW) for session summarization.
 3. **Backend Tier (Go on Cloud Run)**: Relays live audio WebSocket to Vertex AI using server-side Application Default Credentials (ADC), orchestrates batch diarization & title/summary, persists sessions and speaker segments in Google Cloud Firestore (`omi-pixel`), and serves a server-rendered web review interface.
 
 ---
@@ -33,7 +33,7 @@ Pass 2 (Diarized Truth):
 Session Complete -> Pack 16kHz WAV -> Upload to Cloud Run -> Vertex 3.5 Transcribe -> Speaker Segments
 
 Pass 3 (Metadata & Synthesis):
-Transcript -> Gemini 3.5 Flash-Lite (Title) + Gemini 3.7 Flash (Summary) -> Structured Firestore Session
+Transcript -> Gemini 3.5 Flash-Lite (Title) + Gemini 3.8 Flash (Summary) -> Structured Firestore Session
 ```
 
 ### Pass 1: Real-Time Stream
@@ -45,10 +45,10 @@ Transcript -> Gemini 3.5 Flash-Lite (Title) + Gemini 3.7 Flash (Summary) -> Stru
 - When the user stops recording, the app packages the accumulated PCM stream into a standard 44-byte WAV.
 - The app posts the WAV to `POST /api/sessions/{id}/audio?summary=true|false`.
 - The Go backend:
-  1. Calls `gemini-3.5-transcribe-preview` on Vertex AI (`global`) with `audioTranscriptionConfig{diarization: true, wordTimestamp: true}`.
+  1. Calls `gemini-3.5-transcribe` on Vertex AI (`global`) with `audioTranscriptionConfig{diarization: true, wordTimestamp: true}`.
   2. Parses candidate parts into speaker turns with accurate start and end timestamps.
   3. Prompts `gemini-3.5-flash-lite` to generate a concise 3–6 word title.
-  4. If `summary=true`, prompts `gemini-3.7-flash` with `thinkingLevel: "LOW"` to generate a 2–4 sentence summary.
+  4. If `summary=true`, prompts `gemini-3.8-flash` with `thinkingLevel: "LOW"` to generate a 2–4 sentence summary.
   5. Saves the session and segments to Firestore.
 
 ---
@@ -180,7 +180,7 @@ infra/
   1. Persists WAV audio to GCS bucket `gs://...-omi-pixel-audio/sessions/{id}/audio.wav`.
   2. Submits audio to Gemini 3.5 Transcribe on Vertex AI (`global`) with `audioTranscriptionConfig{diarization: true, wordTimestamp: true}`.
   3. Generates concise title via `gemini-3.5-flash-lite`.
-  4. If `summary=true`, generates conversation summary via `gemini-3.7-flash` (`thinkingLevel: LOW`).
+  4. If `summary=true`, generates conversation summary via `gemini-3.8-flash` (`thinkingLevel: LOW`).
   5. Writes session metadata, title, summary, and speaker turns to Firestore named database `omi-pixel`.
 - **Response**: `200 OK` with `SessionDetail` (Session metadata + `segments` array).
 
