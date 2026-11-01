@@ -9,7 +9,7 @@ plugins {
 
 android {
     namespace = "com.ghchinoy.omi_pixel"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
