@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsService {
@@ -11,6 +12,7 @@ class SettingsService {
   static const String _keyLanguage = 'preferred_language';
   static const String _keyGenerateSummary = 'generate_summary';
   static const String _keyLiveTranscriptionMode = 'live_transcription_mode';
+  static const String _keyThemeMode = 'theme_mode';
 
   static const String defaultSummaryModel = 'gemini-4-hydrogen';
   static const List<String> supportedSummaryModels = [
@@ -18,10 +20,31 @@ class SettingsService {
     'gemini-3.8-flash',
   ];
 
+  final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier<ThemeMode>(ThemeMode.system);
+
   SharedPreferences? _prefs;
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
+    themeModeNotifier.value = _parseThemeMode(themeModePreference);
+  }
+
+  static ThemeMode _parseThemeMode(String pref) {
+    switch (pref) {
+      case 'light':
+        return ThemeMode.light;
+      case 'dark':
+        return ThemeMode.dark;
+      default:
+        return ThemeMode.system;
+    }
+  }
+
+  String get themeModePreference => _prefs?.getString(_keyThemeMode) ?? 'system';
+  set themeModePreference(String value) {
+    final normalized = (value == 'light' || value == 'dark') ? value : 'system';
+    _prefs?.setString(_keyThemeMode, normalized);
+    themeModeNotifier.value = _parseThemeMode(normalized);
   }
 
   String get cloudRunUrl => _prefs?.getString(_keyCloudRunUrl) ?? '';

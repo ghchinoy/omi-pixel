@@ -11,6 +11,7 @@ import '../services/auth_service.dart';
 import '../services/recording_file_store.dart';
 import '../services/session_manager.dart';
 import '../services/settings_service.dart';
+import '../theme/lustrous_theme.dart';
 
 class SessionDetailScreen extends StatefulWidget {
   final Session session;
@@ -170,16 +171,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     super.dispose();
   }
 
-  Color _getSpeakerColor(int speakerId) {
-    const colors = [
-      Color(0xFF38BDF8), // Blue
-      Color(0xFF10B981), // Emerald
-      Color(0xFFF59E0B), // Amber
-      Color(0xFFEC4899), // Pink
-      Color(0xFF8B5CF6), // Purple
-      Color(0xFF06B6D4), // Cyan
-    ];
-    return colors[speakerId % colors.length];
+  LustrousCategoryColor _getSpeakerCategory(BuildContext context, int speakerId) {
+    return LustrousColors.of(context).speakerColorFor(speakerId);
   }
 
   String _formatDuration(double seconds) {
@@ -287,6 +280,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final lustrous = LustrousColors.of(context);
     final dateFormat = DateFormat('MMM dd, yyyy • HH:mm');
     final session = _session;
 
@@ -415,10 +409,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                   return Padding(
                     padding: const EdgeInsets.only(top: 12.0),
                     child: Card(
-                      color: Colors.amber.withValues(alpha: 0.12),
+                      color: lustrous.warningContainer.withValues(alpha: 0.45),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: Colors.amber.withValues(alpha: 0.5)),
+                        side: BorderSide(color: lustrous.warning.withValues(alpha: 0.5)),
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(14.0),
@@ -427,13 +421,13 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.cloud_upload_outlined, color: Colors.amber, size: 18),
+                                Icon(Icons.cloud_upload_outlined, color: lustrous.warning, size: 18),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
                                     'Audio saved on device — upload pending',
                                     style: theme.textTheme.titleSmall?.copyWith(
-                                      color: Colors.amber.shade200,
+                                      color: lustrous.onWarningContainer,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -478,10 +472,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           if (_audioAvailable || _audioLoading) ...[
             const SizedBox(height: 12),
             Card(
-              color: const Color(0xFF1E293B),
+              color: theme.colorScheme.surfaceContainer,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
+                side: BorderSide(color: theme.colorScheme.primary.withValues(alpha: 0.35)),
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
@@ -676,7 +670,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
   Widget _buildSegmentBubble(BuildContext context, Segment seg) {
     final theme = Theme.of(context);
-    final speakerColor = _getSpeakerColor(seg.speakerId);
+    final speakerPalette = _getSpeakerCategory(context, seg.speakerId);
     final isPlayingThisSegment = _audioAvailable &&
         _currentPositionSec >= seg.start &&
         _currentPositionSec <= seg.end;
@@ -689,13 +683,13 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         padding: const EdgeInsets.all(14.0),
         decoration: BoxDecoration(
           color: isPlayingThisSegment
-              ? speakerColor.withValues(alpha: 0.15)
-              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              ? speakerPalette.container.withValues(alpha: 0.55)
+              : theme.colorScheme.surfaceContainer,
           borderRadius: BorderRadius.circular(12.0),
           border: Border.all(
             color: isPlayingThisSegment
-                ? speakerColor
-                : theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
+                ? speakerPalette.onContainer
+                : theme.colorScheme.outlineVariant,
             width: isPlayingThisSegment ? 1.5 : 1.0,
           ),
         ),
@@ -706,18 +700,17 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                   decoration: BoxDecoration(
-                    color: speakerColor.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: speakerColor.withValues(alpha: 0.6)),
+                    color: speakerPalette.container,
+                    borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
                     seg.speaker,
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: speakerColor,
+                      color: speakerPalette.onContainer,
                     ),
                   ),
                 ),

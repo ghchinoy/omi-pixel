@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../services/auth_service.dart';
 import '../services/settings_service.dart';
+import '../theme/lustrous_theme.dart';
 import 'login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _selectedLanguage = 'en';
   String _selectedLiveMode = 'verbatim';
   String _selectedSummaryModel = SettingsService.defaultSummaryModel;
+  String _selectedThemeMode = 'system';
   bool _generateSummary = true;
   bool _testingConnection = false;
   String? _connectionStatusMessage;
@@ -37,6 +39,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _selectedLanguage = s.preferredLanguage;
     _selectedLiveMode = s.liveTranscriptionMode;
     _selectedSummaryModel = s.summaryModel;
+    _selectedThemeMode = s.themeModePreference;
     _generateSummary = s.generateSummary;
     if (s.cloudRunUrl.isNotEmpty) {
       _fetchBackendVersion(s.cloudRunUrl);
@@ -92,12 +95,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     s.preferredLanguage = _selectedLanguage;
     s.liveTranscriptionMode = _selectedLiveMode;
     s.summaryModel = _selectedSummaryModel;
+    s.themeModePreference = _selectedThemeMode;
     s.generateSummary = _generateSummary;
 
+    final lustrous = LustrousColors.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Settings saved successfully'),
-        backgroundColor: Colors.green,
+      SnackBar(
+        content: const Text('Settings saved successfully'),
+        backgroundColor: lustrous.positive,
       ),
     );
   }
@@ -157,6 +162,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final lustrous = LustrousColors.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -186,7 +192,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: ListTile(
               leading: Icon(
                 AuthService.instance.isSignedIn ? Icons.account_circle : Icons.no_accounts,
-                color: AuthService.instance.isSignedIn ? Colors.green : Colors.grey,
+                color: AuthService.instance.isSignedIn
+                    ? lustrous.positive
+                    : theme.colorScheme.onSurfaceVariant,
                 size: 36,
               ),
               title: Text(
@@ -255,7 +263,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Text(
               _connectionStatusMessage!,
               style: TextStyle(
-                color: _connectionSuccess ? Colors.green : Colors.red,
+                color: _connectionSuccess ? lustrous.positive : lustrous.danger,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -325,13 +333,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(),
           const SizedBox(height: 12),
           Text(
-            'Language & Preferences',
+            'Appearance & Preferences',
             style: theme.textTheme.titleMedium?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'light', label: Text('Light'), icon: Icon(Icons.light_mode)),
+              ButtonSegment(value: 'system', label: Text('Auto'), icon: Icon(Icons.contrast)),
+              ButtonSegment(value: 'dark', label: Text('Dark'), icon: Icon(Icons.dark_mode)),
+            ],
+            selected: {_selectedThemeMode},
+            onSelectionChanged: (selection) {
+              if (selection.isEmpty) return;
+              final mode = selection.first;
+              setState(() => _selectedThemeMode = mode);
+              SettingsService.instance.themeModePreference = mode;
+            },
+          ),
+          const SizedBox(height: 16),
           DropdownButtonFormField<String>(
             isExpanded: true,
             initialValue: _selectedLiveMode,
@@ -389,20 +412,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 8),
             Card(
               color: _ignoringBatteryOptimizations!
-                  ? Colors.green.withValues(alpha: 0.1)
-                  : Colors.amber.withValues(alpha: 0.12),
+                  ? lustrous.positiveContainer.withValues(alpha: 0.45)
+                  : lustrous.warningContainer.withValues(alpha: 0.45),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
                 side: BorderSide(
                   color: _ignoringBatteryOptimizations!
-                      ? Colors.green.withValues(alpha: 0.4)
-                      : Colors.amber.withValues(alpha: 0.5),
+                      ? lustrous.positive.withValues(alpha: 0.45)
+                      : lustrous.warning.withValues(alpha: 0.5),
                 ),
               ),
               child: ListTile(
                 leading: Icon(
                   _ignoringBatteryOptimizations! ? Icons.battery_saver : Icons.battery_alert,
-                  color: _ignoringBatteryOptimizations! ? Colors.green : Colors.amber,
+                  color: _ignoringBatteryOptimizations! ? lustrous.positive : lustrous.warning,
                 ),
                 title: Text(
                   _ignoringBatteryOptimizations!

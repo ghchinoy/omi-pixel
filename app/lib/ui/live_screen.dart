@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../models/session.dart';
 import '../services/session_manager.dart';
+import '../theme/lustrous_theme.dart';
 import 'session_detail_screen.dart';
 
 class LiveScreen extends StatefulWidget {
@@ -189,6 +190,7 @@ class _LiveScreenState extends State<LiveScreen> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final lustrous = LustrousColors.of(context);
 
     return PopScope(
       canPop: false,
@@ -213,15 +215,15 @@ class _LiveScreenState extends State<LiveScreen> with SingleTickerProviderStateM
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  color: Colors.amber.withValues(alpha: 0.16),
+                  color: lustrous.warningContainer.withValues(alpha: 0.65),
                   child: Row(
                     children: [
-                      const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 18),
+                      Icon(Icons.warning_amber_rounded, color: lustrous.warning, size: 18),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           _foregroundWarning!,
-                          style: theme.textTheme.bodySmall?.copyWith(color: Colors.amber.shade200),
+                          style: theme.textTheme.bodySmall?.copyWith(color: lustrous.onWarningContainer),
                         ),
                       ),
                     ],
@@ -237,10 +239,10 @@ class _LiveScreenState extends State<LiveScreen> with SingleTickerProviderStateM
                   final isStalled = health.stalled;
 
                   final Color pillColor = isDisconnected
-                      ? Colors.red
+                      ? lustrous.danger
                       : (isStalled
-                          ? Colors.amber
-                          : (health.bytesReceived > 0 ? Colors.green : theme.colorScheme.primary));
+                          ? lustrous.warning
+                          : (health.bytesReceived > 0 ? lustrous.positive : theme.colorScheme.primary));
                   final IconData pillIcon = isDisconnected
                       ? Icons.bluetooth_disabled
                       : (isStalled ? Icons.warning_amber_rounded : Icons.graphic_eq);

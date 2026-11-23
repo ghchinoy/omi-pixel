@@ -56,10 +56,10 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.lock_person,
                 size: 72,
-                color: Color(0xFF38BDF8),
+                color: theme.colorScheme.primary,
               ),
               const SizedBox(height: 24),
               Text(
@@ -70,14 +70,14 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 12),
               Text(
                 'Sign in with your authorized Google account to connect to Cloud Run live transcription and diarization services.',
-                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
               if (_errorMessage != null) ...[
                 Text(
                   _errorMessage!,
-                  style: const TextStyle(color: Colors.red),
+                  style: TextStyle(color: theme.colorScheme.error),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),

@@ -18,6 +18,7 @@ import 'package:omi_pixel/services/gemini_live_service.dart';
 import 'package:omi_pixel/services/recording_file_store.dart';
 import 'package:omi_pixel/services/session_manager.dart';
 import 'package:omi_pixel/services/settings_service.dart';
+import 'package:omi_pixel/theme/lustrous_theme.dart';
 import 'package:omi_pixel/ui/home_screen.dart';
 import 'package:omi_pixel/ui/live_screen.dart';
 import 'package:omi_pixel/ui/session_detail_screen.dart';
@@ -100,6 +101,28 @@ void main() {
       // Unknown model falls back safely to default
       SettingsService.instance.summaryModel = 'unknown-model';
       expect(SettingsService.instance.summaryModel, 'gemini-4-hydrogen');
+
+      expect(SettingsService.instance.themeModePreference, 'system');
+      expect(SettingsService.instance.themeModeNotifier.value, ThemeMode.system);
+      SettingsService.instance.themeModePreference = 'light';
+      expect(SettingsService.instance.themeModeNotifier.value, ThemeMode.light);
+      SettingsService.instance.themeModePreference = 'dark';
+      expect(SettingsService.instance.themeModeNotifier.value, ThemeMode.dark);
+    });
+
+    test('LustrousTheme provides Mineral Slate light and Obsidian Slate dark tokens', () {
+      final light = LustrousTheme.light();
+      final dark = LustrousTheme.dark();
+
+      expect(light.colorScheme.primary, const Color(0xFF1D4ED8));
+      expect(light.scaffoldBackgroundColor, const Color(0xFFF8FAFC));
+      expect(dark.colorScheme.primary, const Color(0xFF93C5FD));
+      expect(dark.scaffoldBackgroundColor, const Color(0xFF0B0F17));
+
+      final lightColors = light.extension<LustrousColors>()!;
+      final darkColors = dark.extension<LustrousColors>()!;
+      expect(lightColors.speakerPalette, hasLength(6));
+      expect(darkColors.speakerPalette, hasLength(6));
     });
 
     test('GeminiLiveService.buildLiveProxyUri never embeds access_token in query string', () {

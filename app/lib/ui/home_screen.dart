@@ -7,6 +7,7 @@ import '../models/session.dart';
 import '../services/ble_service.dart';
 import '../services/recording_file_store.dart';
 import '../services/session_manager.dart';
+import '../theme/lustrous_theme.dart';
 import 'live_screen.dart';
 import 'session_detail_screen.dart';
 import 'settings_screen.dart';
@@ -227,6 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildDeviceCard(BuildContext context) {
     final theme = Theme.of(context);
+    final lustrous = LustrousColors.of(context);
 
     return StreamBuilder<bool>(
       stream: BleService.instance.reconnectingStream,
@@ -282,16 +284,20 @@ class _HomeScreenState extends State<HomeScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.green.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(12),
+                              color: lustrous.positiveContainer,
+                              borderRadius: BorderRadius.circular(999),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.battery_std, size: 14, color: Colors.green),
+                                Icon(Icons.battery_std, size: 14, color: lustrous.onPositiveContainer),
                                 const SizedBox(width: 2),
                                 Text(
                                   '${device.batteryLevel}%',
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: lustrous.onPositiveContainer,
+                                  ),
                                 ),
                               ],
                             ),
@@ -350,6 +356,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildRecordingCta(BuildContext context) {
     final theme = Theme.of(context);
+    final lustrous = LustrousColors.of(context);
     return StreamBuilder<bool>(
       stream: SessionManager.instance.recordingStateStream,
       initialData: SessionManager.instance.isRecording,
@@ -357,10 +364,10 @@ class _HomeScreenState extends State<HomeScreen> {
         final isRecording = recSnapshot.data ?? false;
         if (isRecording) {
           return Card(
-            color: Colors.red.withValues(alpha: 0.14),
+            color: lustrous.dangerContainer.withValues(alpha: 0.45),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: Colors.red.shade400.withValues(alpha: 0.7)),
+              side: BorderSide(color: lustrous.danger.withValues(alpha: 0.7)),
             ),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -375,9 +382,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           Container(
                             width: 10,
                             height: 10,
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: Colors.red,
+                              color: lustrous.danger,
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -385,7 +392,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             'Recording in Progress',
                             style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.bold,
-                              color: Colors.red.shade200,
+                              color: lustrous.onDangerContainer,
                             ),
                           ),
                         ],
@@ -454,6 +461,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildPendingUploadsCard(BuildContext context) {
     final theme = Theme.of(context);
+    final lustrous = LustrousColors.of(context);
     return StreamBuilder<Set<String>>(
       stream: SessionManager.instance.diarizingSessionsStream,
       initialData: SessionManager.instance.activeDiarizingSessions,
@@ -473,10 +481,10 @@ class _HomeScreenState extends State<HomeScreen> {
             return Padding(
               padding: const EdgeInsets.only(top: 16.0),
               child: Card(
-                color: Colors.amber.withValues(alpha: 0.12),
+                color: lustrous.warningContainer.withValues(alpha: 0.45),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
-                  side: BorderSide(color: Colors.amber.withValues(alpha: 0.5)),
+                  side: BorderSide(color: lustrous.warning.withValues(alpha: 0.5)),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(14.0),
@@ -485,13 +493,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.cloud_upload_outlined, color: Colors.amber, size: 20),
+                          Icon(Icons.cloud_upload_outlined, color: lustrous.warning, size: 20),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               '${pending.length} recording${pending.length == 1 ? '' : 's'} saved on device (upload pending)',
                               style: theme.textTheme.titleSmall?.copyWith(
-                                color: Colors.amber.shade200,
+                                color: lustrous.onWarningContainer,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -535,15 +543,29 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildSessionCard(BuildContext context, Session session) {
     final theme = Theme.of(context);
+    final lustrous = LustrousColors.of(context);
     final dateFormat = DateFormat('MMM dd, HH:mm');
     final isActivelyDiarizing = SessionManager.instance.isDiarizing(session.id);
     final hasPendingAudio = !isActivelyDiarizing && SessionManager.instance.hasPendingUpload(session.id);
 
-    Color statusColor = Colors.grey;
-    if (session.status == SessionStatus.completed) statusColor = Colors.green;
-    if (session.status == SessionStatus.processing || hasPendingAudio) statusColor = Colors.amber;
-    if (isActivelyDiarizing) statusColor = theme.colorScheme.primary;
-    if (session.status == SessionStatus.failed) statusColor = Colors.red;
+    Color statusColor = theme.colorScheme.onSurfaceVariant;
+    Color statusBg = theme.colorScheme.surfaceContainerHigh;
+    if (session.status == SessionStatus.completed) {
+      statusColor = lustrous.onPositiveContainer;
+      statusBg = lustrous.positiveContainer;
+    }
+    if (session.status == SessionStatus.processing || hasPendingAudio) {
+      statusColor = lustrous.onWarningContainer;
+      statusBg = lustrous.warningContainer;
+    }
+    if (isActivelyDiarizing) {
+      statusColor = theme.colorScheme.onPrimaryContainer;
+      statusBg = theme.colorScheme.primaryContainer;
+    }
+    if (session.status == SessionStatus.failed) {
+      statusColor = lustrous.onDangerContainer;
+      statusBg = lustrous.dangerContainer;
+    }
 
     final statusLabel = isActivelyDiarizing
         ? 'DIARIZING'
@@ -582,10 +604,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(6),
+                      color: statusBg,
+                      borderRadius: BorderRadius.circular(999),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
