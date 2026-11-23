@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:http/http.dart' as http;
 
 import '../services/auth_service.dart';
@@ -24,6 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _connectionStatusMessage;
   bool _connectionSuccess = false;
   String? _backendVersion;
+  bool? _ignoringBatteryOptimizations;
 
   @override
   void initState() {
@@ -36,6 +39,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (s.cloudRunUrl.isNotEmpty) {
       _fetchBackendVersion(s.cloudRunUrl);
     }
+    _checkBatteryOptimizationStatus();
+  }
+
+  Future<void> _checkBatteryOptimizationStatus() async {
+    if (!Platform.isAndroid) return;
+    try {
+      final ignoring = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
+      if (mounted) {
+        setState(() => _ignoringBatteryOptimizations = ignoring);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _requestBatteryOptimizationExemption() async {
+    try {
+      await FlutterForegroundTask.requestIgnoreBatteryOptimization();
+      await _checkBatteryOptimizationStatus();
+    } catch (_) {}
   }
 
   Future<void> _fetchBackendVersion(String baseUrl) async {
@@ -336,6 +357,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
           ),
           const SizedBox(height: 32),
+          if (Platform.isAndroid && _ignoringBatteryOptimizations != null) ...[
+            Text(
+              'Background Recording Reliability',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              color: _ignoringBatteryOptimizations!
+                  ? Colors.green.withValues(alpha: 0.1)
+                  : Colors.amber.withValues(alpha: 0.12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: _ignoringBatteryOptimizations!
+                      ? Colors.green.withValues(alpha: 0.4)
+                      : Colors.amber.withValues(alpha: 0.5),
+                ),
+              ),
+              child: ListTile(
+                leading: Icon(
+                  _ignoringBatteryOptimizations! ? Icons.battery_saver : Icons.battery_alert,
+                  color: _ignoringBatteryOptimizations! ? Colors.green : Colors.amber,
+                ),
+                title: Text(
+                  _ignoringBatteryOptimizations!
+                      ? 'Unrestricted Background Battery'
+                      : 'Battery Optimization Restricted',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(
+                  _ignoringBatteryOptimizations!
+                      ? 'Android will not throttle Omi-Pixel during long background recordings.'
+                      : 'Pixel may pause long recordings while locked. Allow unrestricted battery usage for reliable capture.',
+                ),
+                trailing: _ignoringBatteryOptimizations!
+                    ? null
+                    : TextButton(
+                        onPressed: _requestBatteryOptimizationExemption,
+                        child: const Text('Allow'),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
           FilledButton.icon(
             onPressed: () {
               _saveSettings();

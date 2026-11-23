@@ -16,6 +16,7 @@ import 'package:omi_pixel/services/audio_decoder.dart';
 import 'package:omi_pixel/services/recording_file_store.dart';
 import 'package:omi_pixel/services/session_manager.dart';
 import 'package:omi_pixel/services/settings_service.dart';
+import 'package:omi_pixel/ui/home_screen.dart';
 import 'package:omi_pixel/ui/live_screen.dart';
 import 'package:omi_pixel/ui/session_detail_screen.dart';
 
@@ -253,16 +254,50 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('Finish Recording?'), findsOneWidget);
-      expect(find.text('Keep Recording'), findsOneWidget);
+      expect(find.text('Recording in Progress'), findsOneWidget);
+      expect(find.text('Stay'), findsOneWidget);
+      expect(find.text('Minimize'), findsOneWidget);
       expect(find.text('Finish & Diarize'), findsOneWidget);
 
-      // Tapping Keep Recording dismisses dialog and keeps LiveScreen active
-      await tester.tap(find.text('Keep Recording'));
+      // Tapping Stay dismisses dialog and keeps LiveScreen active
+      await tester.tap(find.text('Stay'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('Finish Recording?'), findsNothing);
+      expect(find.text('Recording in Progress'), findsNothing);
       expect(find.byType(LiveScreen), findsOneWidget);
+
+      // Tapping Minimize button pops LiveScreen cleanly without stopping recording
+      await tester.tap(find.byTooltip('Minimize (keep recording)'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(find.byType(LiveScreen), findsNothing);
+    });
+
+    testWidgets('HomeScreen differentiates idle vs active recording state', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.instance.init();
+      SessionManager.instance.setRecordingStateForTesting(false);
+      addTearDown(() => SessionManager.instance.setRecordingStateForTesting(false));
+
+      await tester.pumpWidget(
+        const MaterialApp(home: HomeScreen()),
+      );
+      await tester.pump();
+
+      // Idle state shows Start Conversation
+      expect(find.text('Start Conversation'), findsOneWidget);
+      expect(find.text('Return to Live Recording'), findsNothing);
+
+      // Active recording state shows Recording in Progress banner + live timer + Return CTA
+      SessionManager.instance.setRecordingStateForTesting(true, elapsedSeconds: 65);
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Recording in Progress'), findsOneWidget);
+      expect(find.text('01:05'), findsOneWidget);
+      expect(find.text('Return to Live Recording'), findsOneWidget);
+      expect(find.text('Start Conversation'), findsNothing);
     });
 
     test('finalizeStoppedSession with 0 audio and live transcript saves completed segments to backend', () async {

@@ -33,6 +33,27 @@ class RecordingAudioHealth {
   bool get hasWarning => !bleConnected || stalled;
 }
 
+@pragma('vm:entry-point')
+void omiForegroundTaskCallback() {
+  FlutterForegroundTask.setTaskHandler(_OmiRecordingTaskHandler());
+}
+
+class _OmiRecordingTaskHandler extends TaskHandler {
+  @override
+  Future<void> onStart(DateTime timestamp, TaskStarter starter) async {}
+
+  @override
+  void onRepeatEvent(DateTime timestamp) {}
+
+  @override
+  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {}
+
+  @override
+  void onNotificationPressed() {
+    FlutterForegroundTask.sendDataToMain('open_live_recording');
+  }
+}
+
 class SessionManager {
   static final SessionManager instance = SessionManager._();
   SessionManager._();
@@ -94,6 +115,14 @@ class SessionManager {
     _fileStore = store;
   }
 
+  @visibleForTesting
+  void setRecordingStateForTesting(bool recording, {int elapsedSeconds = 0}) {
+    _isRecording = recording;
+    _elapsedSeconds = elapsedSeconds;
+    _recordingStateController.add(recording);
+    _durationController.add(elapsedSeconds);
+  }
+
   RecordingAudioHealth _currentAudioHealth = const RecordingAudioHealth();
   RecordingAudioHealth get currentAudioHealth => _currentAudioHealth;
 
@@ -118,6 +147,10 @@ class SessionManager {
     await AudioDecoder.instance.init();
     await _loadLocalSessions();
     _initForegroundTask();
+    // Ensure no stale foreground notification remains when idle on startup
+    if (!_isRecording) {
+      await _stopForegroundRecordingService();
+    }
     await _recoverAndRetryPendingUploadsOnStartup();
   }
 
@@ -193,6 +226,8 @@ class SessionManager {
                   serviceTypes: const [ForegroundServiceTypes.connectedDevice],
                   notificationTitle: 'Omi Recording Active',
                   notificationText: 'Streaming and transcribing conversation...',
+                  notificationInitialRoute: '/live',
+                  callback: omiForegroundTaskCallback,
                 ))();
       }
 

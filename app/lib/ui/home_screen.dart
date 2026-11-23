@@ -300,23 +300,120 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  String _formatElapsed(int seconds) {
+    final mins = seconds ~/ 60;
+    final secs = seconds % 60;
+    return '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+  }
+
+  void _openActiveLiveScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const LiveScreen()),
+    );
+  }
+
   Widget _buildRecordingCta(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: FilledButton.icon(
-        style: FilledButton.styleFrom(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+    final theme = Theme.of(context);
+    return StreamBuilder<bool>(
+      stream: SessionManager.instance.recordingStateStream,
+      initialData: SessionManager.instance.isRecording,
+      builder: (context, recSnapshot) {
+        final isRecording = recSnapshot.data ?? false;
+        if (isRecording) {
+          return Card(
+            color: Colors.red.withValues(alpha: 0.14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Colors.red.shade400.withValues(alpha: 0.7)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 10,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.red,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Recording in Progress',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red.shade200,
+                            ),
+                          ),
+                        ],
+                      ),
+                      StreamBuilder<int>(
+                        stream: SessionManager.instance.durationStream,
+                        initialData: SessionManager.instance.elapsedSeconds,
+                        builder: (context, durSnapshot) {
+                          return Text(
+                            _formatElapsed(durSnapshot.data ?? 0),
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.red.shade600,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: _openActiveLiveScreen,
+                      icon: const Icon(Icons.graphic_eq),
+                      label: const Text(
+                        'Return to Live Recording',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            onPressed: _handleStartRecording,
+            icon: const Icon(Icons.mic, size: 22),
+            label: const Text(
+              'Start Conversation',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
           ),
-        ),
-        onPressed: _handleStartRecording,
-        icon: const Icon(Icons.mic, size: 22),
-        label: const Text(
-          'Start Conversation',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-      ),
+        );
+      },
     );
   }
 

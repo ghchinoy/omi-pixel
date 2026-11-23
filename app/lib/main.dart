@@ -1,15 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import 'services/auth_service.dart';
 import 'services/session_manager.dart';
 import 'services/settings_service.dart';
 import 'ui/home_screen.dart';
+import 'ui/live_screen.dart';
+
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FlutterForegroundTask.initCommunicationPort();
   await AuthService.instance.init();
   await SettingsService.instance.init();
   await SessionManager.instance.init();
+
+  FlutterForegroundTask.addTaskDataCallback((Object data) {
+    if (data == 'open_live_recording' &&
+        SessionManager.instance.isRecording &&
+        !LiveScreen.isActive) {
+      appNavigatorKey.currentState?.push(
+        MaterialPageRoute(builder: (_) => const LiveScreen()),
+      );
+    }
+  });
 
   runApp(const OmiPixelApp());
 }
@@ -20,6 +35,7 @@ class OmiPixelApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: appNavigatorKey,
       title: 'Omi Pixel',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.dark,
@@ -45,6 +61,9 @@ class OmiPixelApp extends StatelessWidget {
           scrolledUnderElevation: 0,
         ),
       ),
+      routes: {
+        '/live': (_) => const LiveScreen(),
+      },
       home: const HomeScreen(),
     );
   }

@@ -5,6 +5,8 @@ import '../services/session_manager.dart';
 import 'session_detail_screen.dart';
 
 class LiveScreen extends StatefulWidget {
+  static bool isActive = false;
+
   const LiveScreen({super.key});
 
   @override
@@ -23,6 +25,7 @@ class _LiveScreenState extends State<LiveScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
+    LiveScreen.isActive = true;
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -60,6 +63,7 @@ class _LiveScreenState extends State<LiveScreen> with SingleTickerProviderStateM
 
   @override
   void dispose() {
+    LiveScreen.isActive = false;
     _pulseController.dispose();
     _transcriptSub?.cancel();
     _warningSub?.cancel();
@@ -79,36 +83,48 @@ class _LiveScreenState extends State<LiveScreen> with SingleTickerProviderStateM
     return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
   }
 
-  Future<void> _confirmStopRecording() async {
+  void _minimizeToHome() {
+    if (_stopping || !mounted) return;
+    Navigator.pop(context);
+  }
+
+  Future<void> _confirmBackNavigation() async {
     if (_stopping || _confirmDialogOpen) return;
     _confirmDialogOpen = true;
 
     try {
-      final shouldFinish = await showDialog<bool>(
+      final action = await showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Finish Recording?'),
+          title: const Text('Recording in Progress'),
           content: const Text(
-            'A recording is currently in progress. Finish and diarize now, or stay on this screen to keep recording.',
+            'You can minimize this screen and keep recording in the background, or finish and diarize now.',
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Keep Recording'),
+              onPressed: () => Navigator.pop(ctx, 'stay'),
+              child: const Text('Stay'),
+            ),
+            OutlinedButton(
+              onPressed: () => Navigator.pop(ctx, 'minimize'),
+              child: const Text('Minimize'),
             ),
             FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.red.shade600,
                 foregroundColor: Colors.white,
               ),
-              onPressed: () => Navigator.pop(ctx, true),
+              onPressed: () => Navigator.pop(ctx, 'finish'),
               child: const Text('Finish & Diarize'),
             ),
           ],
         ),
       );
 
-      if (shouldFinish == true && mounted) {
+      if (!mounted) return;
+      if (action == 'minimize') {
+        Navigator.pop(context);
+      } else if (action == 'finish') {
         await _stopAndProcess();
       }
     } finally {
@@ -162,16 +178,16 @@ class _LiveScreenState extends State<LiveScreen> with SingleTickerProviderStateM
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
-          _confirmStopRecording();
+          _confirmBackNavigation();
         }
       },
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Live Recording'),
           leading: IconButton(
-            icon: const Icon(Icons.close),
-            tooltip: 'Finish recording',
-            onPressed: _stopping ? null : _confirmStopRecording,
+            icon: const Icon(Icons.keyboard_arrow_down),
+            tooltip: 'Minimize (keep recording)',
+            onPressed: _stopping ? null : _minimizeToHome,
           ),
         ),
         body: SafeArea(
