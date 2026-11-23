@@ -153,20 +153,8 @@ const spaTemplate = `<!doctype html>
     import {
       readLustrousThemePreference,
       setLustrousTheme,
-    } from "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/theme";
-    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-badge";
-    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-banner";
-    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-box";
-    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-button";
-    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-dialog";
-    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-flex";
-    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-icon";
-    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-pressable";
-    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-search-bar";
-    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-segmented-control";
-    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-spinner";
-    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-text";
-    import { showSnack } from "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-snackbar";
+      showSnack,
+    } from "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0";
 
     // 1. Theme Initialization (Light / System / Dark)
     const THEME_STORAGE_KEY = "omi-pixel-theme";

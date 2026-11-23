@@ -126,12 +126,15 @@ func TestServerHealthAndSessions(t *testing.T) {
 	for _, marker := range []string{
 		`class="lustrous-root"`,
 		`data-theme="system"`,
-		`@ghchinoy/lustrous-lit@0.2.0`,
+		`from "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0"`,
 		`<lustrous-segmented-control`,
 	} {
 		if !bytes.Contains([]byte(webBody), []byte(marker)) {
 			t.Errorf("GET / body missing Lustrous marker %q", marker)
 		}
+	}
+	if bytes.Contains([]byte(webBody), []byte(`esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/`)) {
+		t.Errorf("GET / body contains multiple esm.sh subpath component imports that cause duplicate customElements.define")
 	}
 
 	// 6. Test Web Session Detail Render
