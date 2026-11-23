@@ -134,9 +134,8 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.StartedAt.IsZero() {
 		req.StartedAt = time.Now().UTC()
-	} else {
-		req.StartedAt = req.StartedAt.UTC()
 	}
+	req.StartedAt = req.StartedAt.UTC()
 
 	session := &Session{
 		ID:        req.ID,
@@ -222,7 +221,7 @@ func (s *Server) handleUploadAudio(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "missing 'audio' file part in form", http.StatusBadRequest)
 			return
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		audioBytes, err = io.ReadAll(file)
 		if err != nil {
 			http.Error(w, "failed to read audio file", http.StatusInternalServerError)
@@ -356,7 +355,7 @@ func (s *Server) handleSaveSegments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, map[string]interface{}{
+	respondJSON(w, http.StatusOK, map[string]any{
 		"status": "ok",
 		"count":  len(req.Segments),
 	})
@@ -374,7 +373,7 @@ func (s *Server) handleDownloadAudio(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("audio not found: %v", err), http.StatusNotFound)
 		return
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	w.Header().Set("Content-Type", "audio/wav")
 	w.Header().Set("Accept-Ranges", "bytes")
@@ -392,7 +391,7 @@ func (s *Server) handleWebSPA(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-func respondJSON(w http.ResponseWriter, status int, data interface{}) {
+func respondJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)

@@ -141,23 +141,7 @@ func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, g
 		langCodes = []string{mapLanguageToBCP47(cleanLang)}
 	}
 
-	var audioPart vertexPart
-	if gcsURI != "" {
-		audioPart = vertexPart{
-			FileData: &vertexFileData{
-				MimeType: "audio/wav",
-				FileURI:  gcsURI,
-			},
-		}
-	} else {
-		encodedAudio := base64.StdEncoding.EncodeToString(audioWavBytes)
-		audioPart = vertexPart{
-			InlineData: &vertexInlineData{
-				MimeType: "audio/wav",
-				Data:     encodedAudio,
-			},
-		}
-	}
+	audioPart := buildAudioPart(gcsURI, audioWavBytes)
 
 	reqBody := vertexGenerateRequest{
 		Contents: []vertexContent{
@@ -193,7 +177,7 @@ func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, g
 	if err != nil {
 		return nil, fmt.Errorf("vertex http request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -272,7 +256,7 @@ func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, g
 	// Build speaker-labeled transcript text for title & summary generation
 	var speakerFormatted strings.Builder
 	for _, seg := range segments {
-		speakerFormatted.WriteString(fmt.Sprintf("%s: %s\n", seg.Speaker, seg.Text))
+		fmt.Fprintf(&speakerFormatted, "%s: %s\n", seg.Speaker, seg.Text)
 	}
 	transcriptBody := strings.TrimSpace(speakerFormatted.String())
 
@@ -281,10 +265,11 @@ func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, g
 	if transcriptBody != "" && g.titleModel != "" {
 		titlePrompt := fmt.Sprintf("Read this conversation transcript and return ONLY a concise 3 to 6 word title summarizing the topic. No quotes, no intro.\n\nTranscript:\n%s", transcriptBody)
 		t, err := g.generateText(ctx, g.titleModel, titlePrompt, "")
+		if err != nil || t == "" {
+			log.Printf("[GeminiClient] Title generation with %s failed: %v", g.titleModel, err)
+		}
 		if err == nil && t != "" {
 			title = strings.Trim(t, `"'`)
-		} else {
-			log.Printf("[GeminiClient] Title generation with %s failed: %v", g.titleModel, err)
 		}
 	}
 	if title == "" {
@@ -296,10 +281,11 @@ func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, g
 	if generateSummary && transcriptBody != "" && g.summaryModel != "" {
 		summaryPrompt := fmt.Sprintf("Provide a clear, concise 2 to 4 sentence summary of the key discussion points and takeaways from this conversation transcript.\n\nTranscript:\n%s", transcriptBody)
 		s, err := g.generateText(ctx, g.summaryModel, summaryPrompt, "LOW")
+		if err != nil || s == "" {
+			log.Printf("[GeminiClient] Summary generation with %s failed: %v", g.summaryModel, err)
+		}
 		if err == nil && s != "" {
 			summary = s
-		} else {
-			log.Printf("[GeminiClient] Summary generation with %s failed: %v", g.summaryModel, err)
 		}
 	}
 
@@ -320,11 +306,11 @@ func (g *GeminiClient) generateText(ctx context.Context, model, prompt, thinking
 		return "", fmt.Errorf("failed to obtain vertex token: %w", err)
 	}
 
-	reqBody := map[string]interface{}{
-		"contents": []map[string]interface{}{
+	reqBody := map[string]any{
+		"contents": []map[string]any{
 			{
 				"role": "user",
-				"parts": []map[string]interface{}{
+				"parts": []map[string]any{
 					{"text": prompt},
 				},
 			},
@@ -332,8 +318,8 @@ func (g *GeminiClient) generateText(ctx context.Context, model, prompt, thinking
 	}
 
 	if thinkingLevel != "" {
-		reqBody["generationConfig"] = map[string]interface{}{
-			"thinkingConfig": map[string]interface{}{
+		reqBody["generationConfig"] = map[string]any{
+			"thinkingConfig": map[string]any{
 				"thinkingLevel": thinkingLevel,
 			},
 		}
@@ -356,7 +342,7 @@ func (g *GeminiClient) generateText(ctx context.Context, model, prompt, thinking
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -401,6 +387,23 @@ func (g *GeminiClient) generateText(ctx context.Context, model, prompt, thinking
 	}
 
 	return strings.TrimSpace(sb.String()), nil
+}
+
+func buildAudioPart(gcsURI string, audioWavBytes []byte) vertexPart {
+	if gcsURI != "" {
+		return vertexPart{
+			FileData: &vertexFileData{
+				MimeType: "audio/wav",
+				FileURI:  gcsURI,
+			},
+		}
+	}
+	return vertexPart{
+		InlineData: &vertexInlineData{
+			MimeType: "audio/wav",
+			Data:     base64.StdEncoding.EncodeToString(audioWavBytes),
+		},
+	}
 }
 
 func deriveTitleFromTranscript(text string) string {

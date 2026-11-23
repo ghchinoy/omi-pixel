@@ -160,9 +160,9 @@ func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 		}
 
 		if !authorized {
-			log.Printf("[Auth] Access denied for authenticated email '%s' (not in authorized_users)", email)
+			log.Printf("[Auth] Access denied for authenticated email %q (not in authorized_users)", email)
 			respondJSON(w, http.StatusForbidden, map[string]string{
-				"error": fmt.Sprintf("Forbidden: account '%s' is not on the authorized users allowlist", email),
+				"error": fmt.Sprintf("Forbidden: account %q is not on the authorized users allowlist", email),
 			})
 			return
 		}

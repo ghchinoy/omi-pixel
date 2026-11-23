@@ -37,7 +37,7 @@ fi
 if command -v go >/dev/null 2>&1; then
   pass "go toolchain found ($(go version | awk '{print $3}'))"
 else
-  fail "go toolchain not found. Install Go 1.23+."
+  fail "go toolchain not found. Install Go 1.26.10+."
 fi
 
 # Optional tools (warn only)

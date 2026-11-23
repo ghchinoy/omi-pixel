@@ -177,13 +177,14 @@ type FirestoreStore struct {
 }
 
 func NewFirestoreStore(ctx context.Context, projectID, database string) (*FirestoreStore, error) {
-	var client *firestore.Client
-	var err error
 	if database != "" && database != "(default)" {
-		client, err = firestore.NewClientWithDatabase(ctx, projectID, database)
-	} else {
-		client, err = firestore.NewClient(ctx, projectID)
+		client, err := firestore.NewClientWithDatabase(ctx, projectID, database)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create firestore client: %w", err)
+		}
+		return &FirestoreStore{client: client}, nil
 	}
+	client, err := firestore.NewClient(ctx, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create firestore client: %w", err)
 	}
@@ -250,19 +251,21 @@ func (f *FirestoreStore) SaveSegments(ctx context.Context, sessionID string, seg
 		return nil
 	}
 	col := f.client.Collection("omi_sessions").Doc(sessionID).Collection("segments")
-	const maxBatchSize = 450
-	for start := 0; start < len(segs); start += maxBatchSize {
-		end := start + maxBatchSize
-		if end > len(segs) {
-			end = len(segs)
+	bw := f.client.BulkWriter(ctx)
+	jobs := make([]*firestore.BulkWriterJob, 0, len(segs))
+	for i, seg := range segs {
+		docRef := col.Doc(fmt.Sprintf("%05d", i))
+		job, err := bw.Set(docRef, seg)
+		if err != nil {
+			bw.End()
+			return fmt.Errorf("failed to enqueue segment %d write: %w", i, err)
 		}
-		batch := f.client.Batch()
-		for i := start; i < end; i++ {
-			docRef := col.Doc(fmt.Sprintf("%05d", i))
-			batch.Set(docRef, segs[i])
-		}
-		if _, err := batch.Commit(ctx); err != nil {
-			return fmt.Errorf("failed to batch write segments: %w", err)
+		jobs = append(jobs, job)
+	}
+	bw.End()
+	for i, job := range jobs {
+		if _, err := job.Results(); err != nil {
+			return fmt.Errorf("failed to commit segment %d write: %w", i, err)
 		}
 	}
 	return nil

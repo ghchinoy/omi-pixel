@@ -46,34 +46,34 @@ func main() {
 
 	ctx := context.Background()
 
-	var store Store
-	if projectID != "" {
-		fsStore, err := NewFirestoreStore(ctx, projectID, database)
-		if err != nil {
-			log.Printf("Warning: Failed to initialize Firestore (%v). Falling back to in-memory store.", err)
-			store = NewMemoryStore()
-		} else {
-			log.Printf("Initialized Google Cloud Firestore store for project '%s'", projectID)
-			store = fsStore
-		}
-	} else {
+	var store Store = NewMemoryStore()
+	if projectID == "" {
 		log.Println("GOOGLE_CLOUD_PROJECT not set. Using in-memory store.")
-		store = NewMemoryStore()
+	} else if fsStore, err := NewFirestoreStore(ctx, projectID, database); err != nil {
+		log.Printf("Warning: Failed to initialize Firestore (%v). Falling back to in-memory store.", err)
+	} else {
+		log.Printf("Initialized Google Cloud Firestore store for project %q", projectID)
+		store = fsStore
 	}
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			log.Printf("Warning: Failed to close store: %v", err)
+		}
+	}()
 
 	var audioStore AudioStore = &NoopAudioStore{}
-	if gcsBucket != "" {
-		gStore, err := NewGCSStore(ctx, gcsBucket)
-		if err != nil {
-			log.Printf("Warning: Failed to initialize GCS store (%v). Audio will be processed inline.", err)
-		} else {
-			log.Printf("Initialized Google Cloud Storage audio store (Bucket: %s)", gcsBucket)
-			audioStore = gStore
-			defer audioStore.Close()
-		}
-	} else {
+	if gcsBucket == "" {
 		log.Println("GCS_BUCKET not set. Audio will be processed inline without bucket persistence.")
+	} else if gStore, err := NewGCSStore(ctx, gcsBucket); err != nil {
+		log.Printf("Warning: Failed to initialize GCS store (%v). Audio will be processed inline.", err)
+	} else {
+		log.Printf("Initialized Google Cloud Storage audio store (Bucket: %s)", gcsBucket)
+		audioStore = gStore
+		defer func() {
+			if err := audioStore.Close(); err != nil {
+				log.Printf("Warning: Failed to close audio store: %v", err)
+			}
+		}()
 	}
 
 	authDisabled := os.Getenv("AUTH_DISABLED") == "true" || os.Getenv("AUTH_DISABLED") == "1"
@@ -88,7 +88,8 @@ func main() {
 	vertexAuth, err := NewVertexAuth(ctx)
 	if err != nil {
 		log.Printf("Warning: Failed to initialize Vertex AI ADC credentials (%v). Live proxy and diarization will fail until ADC is available.", err)
-	} else {
+	}
+	if err == nil {
 		log.Printf("Vertex AI ADC initialized (Project: %s, Location: %s)", projectID, location)
 	}
 

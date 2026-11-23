@@ -247,8 +247,8 @@ const spaTemplate = `
   </style>
 
   <!-- Firebase App & Auth SDKs (Compat) -->
-  <script src="https://www.gstatic.com/firebasejs/13.1.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/13.1.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/13.4.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/13.4.0/firebase-auth-compat.js"></script>
 </head>
 <body>
   <div class="container">

@@ -34,14 +34,14 @@ func TestServerHealthAndSessions(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", rec.Code)
+		t.Errorf("GET /api/health status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	var healthResp map[string]string
 	if err := json.NewDecoder(rec.Body).Decode(&healthResp); err != nil {
-		t.Fatalf("Failed to decode health response: %v", err)
+		t.Fatalf("Decode(/api/health) error = %v", err)
 	}
 	if healthResp["version"] != Version {
-		t.Errorf("Expected health version %q, got %q", Version, healthResp["version"])
+		t.Errorf("GET /api/health version = %q, want %q", healthResp["version"], Version)
 	}
 
 	// 2. Test Create Session
@@ -59,7 +59,7 @@ func TestServerHealthAndSessions(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusCreated {
-		t.Fatalf("Expected status 201, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("POST /api/sessions status = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 
 	// 3. Test Save Segments
@@ -90,7 +90,7 @@ func TestServerHealthAndSessions(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("POST /api/sessions/test-session-123/segments status = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
 	}
 
 	// 4. Test Get Session Detail
@@ -99,19 +99,19 @@ func TestServerHealthAndSessions(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("GET /api/sessions/test-session-123 status = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
 	}
 
 	var detail SessionDetail
 	if err := json.NewDecoder(rec.Body).Decode(&detail); err != nil {
-		t.Fatalf("Failed to decode session detail: %v", err)
+		t.Fatalf("Decode(/api/sessions/test-session-123) error = %v", err)
 	}
 
 	if len(detail.Segments) != 2 {
-		t.Errorf("Expected 2 segments, got %d", len(detail.Segments))
+		t.Errorf("len(detail.Segments) = %d, want 2", len(detail.Segments))
 	}
 	if detail.Segments[0].Speaker != "Speaker 1" {
-		t.Errorf("Expected Speaker 1, got %s", detail.Segments[0].Speaker)
+		t.Errorf("detail.Segments[0].Speaker = %q, want %q", detail.Segments[0].Speaker, "Speaker 1")
 	}
 
 	// 5. Test Web Dashboard Render
@@ -120,7 +120,7 @@ func TestServerHealthAndSessions(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Errorf("Expected web index status 200, got %d", rec.Code)
+		t.Errorf("GET / status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
 	// 6. Test Web Session Detail Render
@@ -129,7 +129,7 @@ func TestServerHealthAndSessions(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Errorf("Expected web detail status 200, got %d", rec.Code)
+		t.Errorf("GET /sessions/test-session-123 status = %d, want %d", rec.Code, http.StatusOK)
 	}
 }
 
@@ -150,7 +150,7 @@ func TestAuthMiddlewareEnforcement(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status 401 Unauthorized, got %d", rec.Code)
+			t.Errorf("auth.Middleware(GET /api/test) status = %d, want %d", rec.Code, http.StatusUnauthorized)
 		}
 	}
 }
@@ -160,51 +160,53 @@ func TestBuildLiveSetupMessage(t *testing.T) {
 
 	// 1. Default / Verbatim with english
 	msg := BuildLiveSetupMessage(modelPath, "verbatim", "en")
-	setup, ok := msg["setup"].(map[string]interface{})
+	setup, ok := msg["setup"].(map[string]any)
 	if !ok {
-		t.Fatalf("Expected setup map in message: %v", msg)
+		t.Fatalf("BuildLiveSetupMessage(%q, %q, %q) missing setup map: %v", modelPath, "verbatim", "en", msg)
 	}
-	transcription, ok := setup["inputAudioTranscription"].(map[string]interface{})
+	transcription, ok := setup["inputAudioTranscription"].(map[string]any)
 	if !ok {
-		t.Fatalf("Expected inputAudioTranscription map in setup: %v", setup)
+		t.Fatalf("BuildLiveSetupMessage(%q, %q, %q) missing inputAudioTranscription map: %v", modelPath, "verbatim", "en", setup)
 	}
 	if transcription["mode"] != "VERBATIM" {
-		t.Errorf("Expected mode VERBATIM, got %v", transcription["mode"])
+		t.Errorf("BuildLiveSetupMessage(%q, %q, %q) mode = %v, want %q", modelPath, "verbatim", "en", transcription["mode"], "VERBATIM")
 	}
 	langCodes, ok := transcription["languageCodes"].([]string)
 	if !ok || len(langCodes) != 1 || langCodes[0] != "en-US" {
-		t.Errorf("Expected languageCodes ['en-US'], got %v", transcription["languageCodes"])
+		t.Errorf("BuildLiveSetupMessage(%q, %q, %q) languageCodes = %v, want [en-US]", modelPath, "verbatim", "en", transcription["languageCodes"])
 	}
 
 	// 2. Smart mode with Spanish (must omit languageCodes to avoid Vertex AI closeCode=1007)
 	msg = BuildLiveSetupMessage(modelPath, "smart", "es")
-	setup = msg["setup"].(map[string]interface{})
-	transcription = setup["inputAudioTranscription"].(map[string]interface{})
+	setup = msg["setup"].(map[string]any)
+	transcription = setup["inputAudioTranscription"].(map[string]any)
 	if transcription["mode"] != "SMART" {
-		t.Errorf("Expected mode SMART, got %v", transcription["mode"])
+		t.Errorf("BuildLiveSetupMessage(%q, %q, %q) mode = %v, want %q", modelPath, "smart", "es", transcription["mode"], "SMART")
 	}
 	if _, exists := transcription["languageCodes"]; exists {
-		t.Errorf("Expected languageCodes to be omitted when mode is SMART, got %v", transcription["languageCodes"])
+		t.Errorf("BuildLiveSetupMessage(%q, %q, %q) languageCodes = %v, want omitted", modelPath, "smart", "es", transcription["languageCodes"])
 	}
 
 	// 3. Unset mode and multi-language
 	msg = BuildLiveSetupMessage(modelPath, "", "multi")
-	setup = msg["setup"].(map[string]interface{})
-	transcription = setup["inputAudioTranscription"].(map[string]interface{})
+	setup = msg["setup"].(map[string]any)
+	transcription = setup["inputAudioTranscription"].(map[string]any)
 	if _, exists := transcription["mode"]; exists {
-		t.Errorf("Expected mode not set when empty, got %v", transcription["mode"])
+		t.Errorf("BuildLiveSetupMessage(%q, %q, %q) mode = %v, want omitted", modelPath, "", "multi", transcription["mode"])
 	}
 	if _, exists := transcription["languageCodes"]; exists {
-		t.Errorf("Expected languageCodes not set when 'multi', got %v", transcription["languageCodes"])
+		t.Errorf("BuildLiveSetupMessage(%q, %q, %q) languageCodes = %v, want omitted", modelPath, "", "multi", transcription["languageCodes"])
 	}
 }
 
 func TestSessionIDValidationAndNoopAudioStoreCap(t *testing.T) {
 	if !isValidSessionID("sess_12345-abc") {
-		t.Errorf("Expected valid session ID to pass")
+		t.Errorf("isValidSessionID(%q) = false, want true", "sess_12345-abc")
 	}
-	if isValidSessionID("../etc/passwd") || isValidSessionID("sess/../../bad") || isValidSessionID("") {
-		t.Errorf("Expected path traversal or empty session ID to be rejected")
+	for _, badID := range []string{"../etc/passwd", "sess/../../bad", ""} {
+		if isValidSessionID(badID) {
+			t.Errorf("isValidSessionID(%q) = true, want false", badID)
+		}
 	}
 
 	audioStore := &NoopAudioStore{}
@@ -213,10 +215,10 @@ func TestSessionIDValidationAndNoopAudioStoreCap(t *testing.T) {
 		id := "sess_" + string(rune('a'+i))
 		_, err := audioStore.UploadWAV(ctx, id, []byte("RIFF0000WAVEfmt "))
 		if err != nil {
-			t.Fatalf("UploadWAV failed: %v", err)
+			t.Fatalf("NoopAudioStore.UploadWAV(%q) error = %v", id, err)
 		}
 	}
 	if len(audioStore.files) != maxInMemoryAudioSessions {
-		t.Errorf("Expected NoopAudioStore to cap at %d sessions, got %d", maxInMemoryAudioSessions, len(audioStore.files))
+		t.Errorf("len(audioStore.files) = %d, want %d", len(audioStore.files), maxInMemoryAudioSessions)
 	}
 }

@@ -1,0 +1,16 @@
+.git
+.github
+.beads
+.serena
+.dolt
+*.md
+.DS_Store
+*.env
+service
+server
+bin
+out
+tmp
+*.json
+*_test.go
+!web/**

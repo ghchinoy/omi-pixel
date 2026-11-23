@@ -7,7 +7,7 @@ import '../services/settings_service.dart';
 import 'login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
-  static const String appVersion = '0.3.0+3';
+  static const String appVersion = '0.3.1+4';
 
   const SettingsScreen({super.key});
 

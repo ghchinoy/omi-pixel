@@ -52,14 +52,13 @@ type ClientTranscriptEvent struct {
 }
 
 // BuildLiveSetupMessage constructs the setup payload sent to Vertex AI Multimodal Live WebSocket.
-func BuildLiveSetupMessage(modelPath, modeParam, langParam string) map[string]interface{} {
-	inputAudioTranscription := map[string]interface{}{}
+func BuildLiveSetupMessage(modelPath, modeParam, langParam string) map[string]any {
+	inputAudioTranscription := map[string]any{}
 
 	cleanMode := strings.ToUpper(strings.TrimSpace(modeParam))
-	if cleanMode == "SMART" {
-		inputAudioTranscription["mode"] = "SMART"
-	} else if cleanMode == "VERBATIM" {
-		inputAudioTranscription["mode"] = "VERBATIM"
+	switch cleanMode {
+	case "SMART", "VERBATIM":
+		inputAudioTranscription["mode"] = cleanMode
 	}
 
 	cleanLang := strings.TrimSpace(langParam)
@@ -69,10 +68,10 @@ func BuildLiveSetupMessage(modelPath, modeParam, langParam string) map[string]in
 		inputAudioTranscription["languageCodes"] = []string{mapLanguageToBCP47(cleanLang)}
 	}
 
-	return map[string]interface{}{
-		"setup": map[string]interface{}{
+	return map[string]any{
+		"setup": map[string]any{
 			"model": modelPath,
-			"generationConfig": map[string]interface{}{
+			"generationConfig": map[string]any{
 				"responseModalities": []string{"TEXT"},
 			},
 			"inputAudioTranscription": inputAudioTranscription,
@@ -101,7 +100,7 @@ func (lp *LiveProxy) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[LiveProxy] Failed to accept client websocket: %v", err)
 		return
 	}
-	defer clientConn.Close(websocket.StatusNormalClosure, "session closed")
+	defer func() { _ = clientConn.Close(websocket.StatusNormalClosure, "session closed") }()
 	clientConn.SetReadLimit(1 << 20) // 1MB read limit for audio frames
 
 	// 2. Fetch OAuth Token for Vertex
@@ -136,7 +135,7 @@ func (lp *LiveProxy) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	defer vertexConn.Close(websocket.StatusNormalClosure, "closing upstream")
+	defer func() { _ = vertexConn.Close(websocket.StatusNormalClosure, "closing upstream") }()
 	vertexConn.SetReadLimit(1 << 20) // 1MB read limit for upstream Vertex messages
 
 	log.Printf("[LiveProxy] Connected to Vertex AI Live API for model %s", modelPath)
@@ -281,9 +280,9 @@ func (lp *LiveProxy) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			if mimeType == "" {
 				mimeType = "audio/pcm;rate=16000"
 			}
-			realtimeInput := map[string]interface{}{
-				"realtimeInput": map[string]interface{}{
-					"mediaChunks": []map[string]interface{}{
+			realtimeInput := map[string]any{
+				"realtimeInput": map[string]any{
+					"mediaChunks": []map[string]any{
 						{
 							"mimeType": mimeType,
 							"data":     frame.Audio,
@@ -306,7 +305,7 @@ func (lp *LiveProxy) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[LiveProxy] Live session ended.")
 }
 
-func writeClientJSON(ctx context.Context, conn *websocket.Conn, v interface{}) error {
+func writeClientJSON(ctx context.Context, conn *websocket.Conn, v any) error {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return err

@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-23
+
+### Changed
+- **Android Build Toolchain**: Upgraded Kotlin Gradle plugin to `2.4.21` and Android `compileSdk` to `37`.
+- **Go & Flutter Dependency Freshness**: Upgraded Go backend modules (`cloud.google.com/go/storage v1.71.0`, `firebase.google.com/go/v4 v4.23.0`, `golang.org/x/oauth2 v0.38.0`, `google.golang.org/api v0.316.0`, `golang.org/x/crypto v0.59.0`, `golang.org/x/net v0.63.0`), Web SPA Firebase JS SDK (`13.4.0`), and Flutter companion dependencies (`firebase_core ^5.2.0`, `firebase_auth ^7.1.0`, `flutter_blue_plus ^2.3.15`).
+- **Firestore Segment Persistence & Go Code Health**: Migrated `FirestoreStore.SaveSegments` from deprecated `WriteBatch` to `BulkWriter`, resolved all `golangci-lint` (`errcheck`/`staticcheck`) issues, and modernized Go idioms (`any`, `%q` formatting, and Google Go test failure formatting).
+
+### Security
+- **Go Stdlib & Container Hardening**: Raised `service/go.mod` floor from `go 1.26.0` to `go 1.26.10` to enforce patched stdlib resolution under `GOTOOLCHAIN=auto`, upgraded `service/Dockerfile` runtime from `alpine:3.21` to `alpine:3.24` with `apk upgrade --no-cache` in both stages, and added `service/.gcloudignore` for clean Cloud Build source uploads.
+
 ## [0.3.0] - 2026-11-01
 
 ### Added
@@ -50,7 +60,8 @@ _Initial release._
 - Audio playback cards with turn tap-to-seek synchronization on both mobile and web clients.
 - Infrastructure automation scripts (`infra/`) and top-level `Makefile`.
 
-[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/ghchinoy/omi-pixel/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ghchinoy/omi-pixel/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ghchinoy/omi-pixel/releases/tag/v0.1.0
