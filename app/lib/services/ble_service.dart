@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:omi_device/omi_device.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -33,6 +34,7 @@ class BleService {
   bool get isScanning => FlutterBluePlus.isScanningNow;
 
   StreamSubscription? _audioSub;
+  StreamSubscription<BluetoothConnectionState>? _connectionStateSub;
 
   Future<bool> requestPermissions() async {
     if (Platform.isAndroid) {
@@ -96,6 +98,20 @@ class BleService {
       );
       _deviceController.add(_currentDevice);
 
+      // Monitor BLE connection drops so active recordings detect disconnects immediately
+      await _connectionStateSub?.cancel();
+      final fbpDevice = BluetoothDevice.fromId(device.id);
+      _connectionStateSub = fbpDevice.connectionState.listen((state) {
+        if (state == BluetoothConnectionState.disconnected) {
+          final current = _currentDevice;
+          if (current != null && current.id == device.id && current.isConnected) {
+            debugPrint('[BleService] Device ${current.name} (${current.id}) disconnected unexpectedly.');
+            _currentDevice = current.copyWith(isConnected: false);
+            _deviceController.add(_currentDevice);
+          }
+        }
+      });
+
       // Persist last connected device
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -112,6 +128,8 @@ class BleService {
   }
 
   Future<void> disconnect() async {
+    await _connectionStateSub?.cancel();
+    _connectionStateSub = null;
     await _audioSub?.cancel();
     _audioSub = null;
     try {

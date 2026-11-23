@@ -125,20 +125,30 @@ class ApiClient {
     }
   }
 
-  Future<bool> saveSegments(String sessionId, List<Segment> segments, {String title = '', String summary = ''}) async {
+  Future<bool> saveSegments(
+    String sessionId,
+    List<Segment> segments, {
+    String title = '',
+    String summary = '',
+    String? status,
+  }) async {
     if (!isConfigured) return false;
 
     try {
       final url = Uri.parse('$_baseUrl/api/sessions/$sessionId/segments');
       final headers = await _authHeaders({'Content-Type': 'application/json'});
+      final payload = <String, dynamic>{
+        'title': title,
+        'summary': summary,
+        'segments': segments.map((s) => s.toJson()).toList(),
+      };
+      if (status != null && status.isNotEmpty) {
+        payload['status'] = status;
+      }
       final resp = await http.post(
         url,
         headers: headers,
-        body: jsonEncode({
-          'title': title,
-          'summary': summary,
-          'segments': segments.map((s) => s.toJson()).toList(),
-        }),
+        body: jsonEncode(payload),
       );
 
       if (resp.statusCode != 200) {

@@ -305,9 +305,10 @@ func (s *Server) handleUploadAudio(w http.ResponseWriter, r *http.Request) {
 }
 
 type SaveSegmentsRequest struct {
-	Segments []Segment `json:"segments"`
-	Title    string    `json:"title,omitempty"`
-	Summary  string    `json:"summary,omitempty"`
+	Segments []Segment     `json:"segments"`
+	Title    string        `json:"title,omitempty"`
+	Summary  string        `json:"summary,omitempty"`
+	Status   SessionStatus `json:"status,omitempty"`
 }
 
 func (s *Server) handleSaveSegments(w http.ResponseWriter, r *http.Request) {
@@ -324,12 +325,17 @@ func (s *Server) handleSaveSegments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	targetStatus := StatusCompleted
+	if req.Status == StatusFailed {
+		targetStatus = StatusFailed
+	}
+
 	ctx := r.Context()
 	session, err := s.store.GetSession(ctx, id)
 	if err != nil {
 		session = &Session{
 			ID:        id,
-			Status:    StatusCompleted,
+			Status:    targetStatus,
 			StartedAt: time.Now().UTC(),
 		}
 	}
@@ -340,7 +346,7 @@ func (s *Server) handleSaveSegments(w http.ResponseWriter, r *http.Request) {
 	if req.Summary != "" {
 		session.Summary = req.Summary
 	}
-	session.Status = StatusCompleted
+	session.Status = targetStatus
 	now := time.Now().UTC()
 	session.FinishedAt = &now
 
@@ -348,7 +354,11 @@ func (s *Server) handleSaveSegments(w http.ResponseWriter, r *http.Request) {
 		session.DurationSeconds = req.Segments[len(req.Segments)-1].End
 	}
 
-	_ = s.store.SaveSession(ctx, session)
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		log.Printf("Failed to save session %s: %v", id, err)
+		http.Error(w, "failed to save session", http.StatusInternalServerError)
+		return
+	}
 	if err := s.store.SaveSegments(ctx, id, req.Segments); err != nil {
 		log.Printf("Failed to save segments for session %s: %v", id, err)
 		http.Error(w, "failed to save segments", http.StatusInternalServerError)
@@ -356,7 +366,7 @@ func (s *Server) handleSaveSegments(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, map[string]any{
-		"status": "ok",
+		"status": session.Status,
 		"count":  len(req.Segments),
 	})
 }

@@ -222,3 +222,56 @@ func TestSessionIDValidationAndNoopAudioStoreCap(t *testing.T) {
 		t.Errorf("len(audioStore.files) = %d, want %d", len(audioStore.files), maxInMemoryAudioSessions)
 	}
 }
+
+func TestSaveSegments_FailedStatusOnZeroAudio(t *testing.T) {
+	ctx := t.Context()
+	store := NewMemoryStore()
+	auth, err := NewAuthenticator(ctx, "test-proj", store, true)
+	if err != nil {
+		t.Fatalf("NewAuthenticator(test-proj, disabled=true) error = %v", err)
+	}
+	spaTmpl, err := web.ParseTemplates()
+	if err != nil {
+		t.Fatalf("web.ParseTemplates() error = %v", err)
+	}
+	server := NewServer(store, &NoopAudioStore{}, nil, nil, auth, spaTmpl, web.DefaultWebConfig)
+	handler := server.Routes()
+
+	// Create session initially in recording status
+	createBody, _ := json.Marshal(CreateSessionRequest{
+		ID:       "sess-zero-audio",
+		DeviceID: "omi-1",
+		Title:    "Empty Capture",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/sessions", bytes.NewReader(createBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/sessions status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+
+	// Finalize with 0 segments and status=failed
+	failBody, _ := json.Marshal(SaveSegmentsRequest{
+		Summary: "No audio was received from the Omi device.",
+		Status:  StatusFailed,
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/sessions/sess-zero-audio/segments", bytes.NewReader(failBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST /api/sessions/sess-zero-audio/segments status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	session, err := store.GetSession(ctx, "sess-zero-audio")
+	if err != nil {
+		t.Fatalf("store.GetSession(sess-zero-audio) error = %v", err)
+	}
+	if session.Status != StatusFailed {
+		t.Errorf("session.Status = %q, want %q", session.Status, StatusFailed)
+	}
+	if session.FinishedAt == nil {
+		t.Errorf("session.FinishedAt = nil, want non-nil timestamp")
+	}
+}

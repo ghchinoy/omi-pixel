@@ -5,6 +5,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import '../models/device.dart';
 import '../models/segment.dart';
 import '../models/session.dart';
 import 'api_client.dart';
@@ -13,6 +14,23 @@ import 'ble_service.dart';
 import 'gemini_live_service.dart';
 import 'settings_service.dart';
 
+/// Snapshot of live BLE connection and PCM audio capture health during a recording.
+class RecordingAudioHealth {
+  final int bytesReceived;
+  final int packetCount;
+  final bool bleConnected;
+  final bool stalled;
+
+  const RecordingAudioHealth({
+    this.bytesReceived = 0,
+    this.packetCount = 0,
+    this.bleConnected = true,
+    this.stalled = false,
+  });
+
+  bool get hasWarning => !bleConnected || stalled;
+}
+
 class SessionManager {
   static final SessionManager instance = SessionManager._();
   SessionManager._();
@@ -20,6 +38,10 @@ class SessionManager {
   final GeminiLiveService _geminiLive = GeminiLiveService();
   final List<Uint8List> _recordedPcmChunks = [];
   int _totalRecordedBytes = 0;
+  int _receivedPacketCount = 0;
+  DateTime? _lastAudioAt;
+  bool _bleDisconnectedDuringRecording = false;
+  bool _stalledWarningEmitted = false;
 
   Session? _activeSession;
   Session? get activeSession => _activeSession;
@@ -45,6 +67,12 @@ class SessionManager {
   final _warningController = StreamController<String>.broadcast();
   Stream<String> get warningStream => _warningController.stream;
 
+  final _audioHealthController = StreamController<RecordingAudioHealth>.broadcast();
+  Stream<RecordingAudioHealth> get audioHealthStream => _audioHealthController.stream;
+
+  RecordingAudioHealth _currentAudioHealth = const RecordingAudioHealth();
+  RecordingAudioHealth get currentAudioHealth => _currentAudioHealth;
+
   String? _lastForegroundServiceError;
   String? get lastForegroundServiceError => _lastForegroundServiceError;
 
@@ -54,6 +82,7 @@ class SessionManager {
 
   StreamSubscription? _audioStreamSub;
   StreamSubscription? _geminiTranscriptSub;
+  StreamSubscription<OmiDeviceInfo?>? _bleDeviceSub;
 
   List<Session> _cachedSessions = [];
   List<Session> get cachedSessions => _cachedSessions;
@@ -179,11 +208,33 @@ class SessionManager {
 
     _recordedPcmChunks.clear();
     _totalRecordedBytes = 0;
+    _receivedPacketCount = 0;
+    _lastAudioAt = null;
+    _bleDisconnectedDuringRecording = false;
+    _stalledWarningEmitted = false;
     _liveTranscriptBuffer.clear();
     _elapsedSeconds = 0;
     _isRecording = true;
+    _emitAudioHealth(bleConnected: true, stalled: false);
     _recordingStateController.add(true);
     _transcriptStreamController.add('');
+
+    // Monitor BLE connection drops during recording
+    await _bleDeviceSub?.cancel();
+    _bleDeviceSub = BleService.instance.deviceStream.listen((dev) {
+      if (!_isRecording) return;
+      final connected = dev != null && dev.isConnected;
+      if (!connected && !_bleDisconnectedDuringRecording) {
+        _bleDisconnectedDuringRecording = true;
+        _emitAudioHealth(bleConnected: false, stalled: true);
+        const msg = 'Omi device disconnected during recording. Tap Finish to save captured audio.';
+        debugPrint('[SessionManager] $msg');
+        _warningController.add(msg);
+      } else if (connected && _bleDisconnectedDuringRecording) {
+        _bleDisconnectedDuringRecording = false;
+        _emitAudioHealth(bleConnected: true, stalled: false);
+      }
+    });
 
     // 1. Notify Cloud Run of session start (non-blocking)
     unawaited(ApiClient.instance.createSession(_activeSession!));
@@ -220,25 +271,76 @@ class SessionManager {
     // 3. Start Foreground notification service so Android keeps BLE/WS alive in background
     await startForegroundRecordingService();
 
-    // 4. Start timer
+    // 4. Start timer & periodic audio stall detection
     _durationTimer?.cancel();
     _durationTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _elapsedSeconds++;
       _durationController.add(_elapsedSeconds);
+
+      final isStalled = _bleDisconnectedDuringRecording ||
+          (_elapsedSeconds >= 5 &&
+              (_totalRecordedBytes == 0 ||
+                  (_lastAudioAt != null &&
+                      DateTime.now().difference(_lastAudioAt!).inSeconds >= 5)));
+      if (isStalled != _currentAudioHealth.stalled) {
+        _emitAudioHealth(
+          bleConnected: !_bleDisconnectedDuringRecording,
+          stalled: isStalled,
+        );
+      }
+      if (isStalled && !_bleDisconnectedDuringRecording && !_stalledWarningEmitted) {
+        _stalledWarningEmitted = true;
+        final msg = _totalRecordedBytes == 0
+            ? 'No audio packets received from Omi yet. Check wearable connection.'
+            : 'Audio stream from Omi appears stalled.';
+        debugPrint('[SessionManager] $msg');
+        _warningController.add(msg);
+      }
     });
 
     // 5. Subscribe to BLE Audio Stream
-    _audioStreamSub?.cancel();
-    _audioStreamSub = BleService.instance.startPcmAudioStream().listen((pcmBytes) {
-      final chunk = Uint8List.fromList(pcmBytes);
-      _recordedPcmChunks.add(chunk);
-      _totalRecordedBytes += chunk.length;
+    await _audioStreamSub?.cancel();
+    _audioStreamSub = BleService.instance.startPcmAudioStream().listen(
+      (pcmBytes) {
+        final chunk = Uint8List.fromList(pcmBytes);
+        _recordedPcmChunks.add(chunk);
+        _totalRecordedBytes += chunk.length;
+        _receivedPacketCount++;
+        _lastAudioAt = DateTime.now();
+        _stalledWarningEmitted = false;
+        _emitAudioHealth(
+          bleConnected: !_bleDisconnectedDuringRecording,
+          stalled: false,
+        );
 
-      // Stream to Gemini Live
-      _geminiLive.sendPcmChunk(chunk);
-    });
+        // Stream to Gemini Live
+        _geminiLive.sendPcmChunk(chunk);
+      },
+      onError: (Object err, StackTrace st) {
+        debugPrint('[SessionManager] BLE audio stream error: $err\n$st');
+        _emitAudioHealth(bleConnected: false, stalled: true);
+        _warningController.add('Audio stream interrupted: $err');
+      },
+      onDone: () {
+        if (!_isRecording) return;
+        debugPrint('[SessionManager] BLE audio stream closed unexpectedly during recording.');
+        _bleDisconnectedDuringRecording = true;
+        _emitAudioHealth(bleConnected: false, stalled: true);
+        _warningController.add('Omi audio stream ended unexpectedly. Tap Finish to save captured audio.');
+      },
+    );
 
     return true;
+  }
+
+  void _emitAudioHealth({required bool bleConnected, required bool stalled}) {
+    _currentAudioHealth = RecordingAudioHealth(
+      bytesReceived: _totalRecordedBytes,
+      packetCount: _receivedPacketCount,
+      bleConnected: bleConnected,
+      stalled: stalled,
+    );
+    _audioHealthController.add(_currentAudioHealth);
   }
 
   Future<Session?> stopRecording() async {
@@ -249,6 +351,8 @@ class SessionManager {
     _durationTimer?.cancel();
     _durationTimer = null;
 
+    await _bleDeviceSub?.cancel();
+    _bleDeviceSub = null;
     await _audioStreamSub?.cancel();
     _audioStreamSub = null;
     await _geminiTranscriptSub?.cancel();
@@ -273,30 +377,79 @@ class SessionManager {
     // Package to WAV
     final wavBytes = AudioDecoder.createWav(pcmBuffer);
 
-    Session updatedSession = _activeSession!.copyWith(
+    final updatedSession = await finalizeStoppedSession(
+      session: _activeSession!,
+      wavBytes: wavBytes,
+      liveTranscript: _liveTranscriptBuffer.toString(),
+      finishTime: finishTime,
+      durationSec: durationSec,
+    );
+
+    _activeSession = null;
+    _recordedPcmChunks.clear();
+    _totalRecordedBytes = 0;
+    _receivedPacketCount = 0;
+    _lastAudioAt = null;
+    _bleDisconnectedDuringRecording = false;
+    _stalledWarningEmitted = false;
+    _liveTranscriptBuffer.clear();
+
+    return updatedSession;
+  }
+
+  /// Finalizes a stopped session locally and on the backend.
+  ///
+  /// Handles 0-audio recordings cleanly so Firestore never remains stuck in
+  /// `status='recording'`: saves live transcript segments if present, or marks
+  /// the session `failed` when neither audio nor transcript was captured.
+  @visibleForTesting
+  Future<Session> finalizeStoppedSession({
+    required Session session,
+    required Uint8List wavBytes,
+    required String liveTranscript,
+    required DateTime finishTime,
+    required double durationSec,
+    bool? apiConfigured,
+    Future<Session?> Function(String sessionId, Uint8List wavBytes)? uploadAudio,
+    Future<bool> Function(
+      String sessionId,
+      List<Segment> segments, {
+      String title,
+      String summary,
+      String? status,
+    })? saveSegments,
+  }) async {
+    final isConfigured = apiConfigured ?? ApiClient.instance.isConfigured;
+    final doUploadAudio = uploadAudio ?? ApiClient.instance.uploadAudio;
+    final doSaveSegments = saveSegments ?? ApiClient.instance.saveSegments;
+
+    Session updatedSession = session.copyWith(
       status: SessionStatus.processing,
       finishedAt: finishTime,
       durationSeconds: durationSec,
     );
-
-    // Save initial local state
     _saveSessionLocally(updatedSession);
 
-    // Upload audio WAV to Cloud Run Go service for Gemini 3.5 diarization
-    if (ApiClient.instance.isConfigured && wavBytes.length > 44) {
+    if (isConfigured && wavBytes.length > 44) {
       try {
-        final diarizedSession = await ApiClient.instance.uploadAudio(updatedSession.id, wavBytes);
+        final diarizedSession = await doUploadAudio(updatedSession.id, wavBytes);
         if (diarizedSession != null) {
           updatedSession = diarizedSession;
           _saveSessionLocally(updatedSession);
+          return updatedSession;
         }
-      } catch (_) {}
-    } else if (_liveTranscriptBuffer.isNotEmpty) {
-      // Fallback: save live transcript as single segment if Cloud Run not configured
+      } catch (e) {
+        debugPrint('[SessionManager] Audio upload failed for ${updatedSession.id}: $e');
+      }
+      return updatedSession;
+    }
+
+    final cleanTranscript = liveTranscript.trim();
+    if (cleanTranscript.isNotEmpty) {
       final seg = Segment(
         speaker: 'Speaker 1',
         speakerId: 0,
-        text: _liveTranscriptBuffer.toString(),
+        text: cleanTranscript,
         start: 0.0,
         end: durationSec,
       );
@@ -305,13 +458,37 @@ class SessionManager {
         segments: [seg],
       );
       _saveSessionLocally(updatedSession);
+
+      if (isConfigured) {
+        await doSaveSegments(
+          updatedSession.id,
+          [seg],
+          title: updatedSession.title,
+          summary: updatedSession.summary,
+          status: SessionStatus.completed.name,
+        );
+      }
+      return updatedSession;
     }
 
-    _activeSession = null;
-    _recordedPcmChunks.clear();
-    _totalRecordedBytes = 0;
-    _liveTranscriptBuffer.clear();
+    // Zero audio bytes AND zero live transcript: transition cleanly to failed
+    // so neither local cache nor Firestore stays stuck in status='recording'.
+    const noAudioSummary = 'No audio was received from the Omi device.';
+    updatedSession = updatedSession.copyWith(
+      status: SessionStatus.failed,
+      summary: noAudioSummary,
+    );
+    _saveSessionLocally(updatedSession);
 
+    if (isConfigured) {
+      await doSaveSegments(
+        updatedSession.id,
+        const [],
+        title: updatedSession.title,
+        summary: noAudioSummary,
+        status: SessionStatus.failed.name,
+      );
+    }
     return updatedSession;
   }
 

@@ -12,6 +12,7 @@ import 'package:omi_pixel/models/session.dart';
 import 'package:omi_pixel/services/audio_decoder.dart';
 import 'package:omi_pixel/services/session_manager.dart';
 import 'package:omi_pixel/services/settings_service.dart';
+import 'package:omi_pixel/ui/live_screen.dart';
 import 'package:omi_pixel/ui/session_detail_screen.dart';
 
 void main() {
@@ -211,6 +212,121 @@ void main() {
       expect(ok, isFalse);
       expect(SessionManager.instance.lastForegroundServiceError, contains('Manifest service missing'));
       expect(warnings, hasLength(1));
+    });
+  });
+
+  group('LiveScreen PopScope & Zero-Audio Finalization Tests', () {
+    testWidgets('LiveScreen guards back navigation with PopScope confirmation dialog', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (ctx) => Scaffold(
+              body: ElevatedButton(
+                onPressed: () => Navigator.push(
+                  ctx,
+                  MaterialPageRoute(builder: (_) => const LiveScreen()),
+                ),
+                child: const Text('Open Live'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Live'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(LiveScreen), findsOneWidget);
+
+      // Verify PopScope(canPop: false) wraps LiveScreen
+      final popScope = tester.widget<PopScope<dynamic>>(
+        find.byWidgetPredicate((w) => w is PopScope),
+      );
+      expect(popScope.canPop, isFalse);
+
+      // Trigger system back gesture — should show confirmation dialog instead of popping
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Finish Recording?'), findsOneWidget);
+      expect(find.text('Keep Recording'), findsOneWidget);
+      expect(find.text('Finish & Diarize'), findsOneWidget);
+
+      // Tapping Keep Recording dismisses dialog and keeps LiveScreen active
+      await tester.tap(find.text('Keep Recording'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('Finish Recording?'), findsNothing);
+      expect(find.byType(LiveScreen), findsOneWidget);
+    });
+
+    test('finalizeStoppedSession with 0 audio and live transcript saves completed segments to backend', () async {
+      SharedPreferences.setMockInitialValues({});
+      String? savedStatus;
+      List<Segment> savedSegments = const [];
+
+      final baseSession = Session(
+        id: 'sess_zero_with_text',
+        deviceId: 'omi_1',
+        title: 'Quick Note',
+        status: SessionStatus.recording,
+        startedAt: DateTime.now(),
+        createdAt: DateTime.now(),
+      );
+
+      final result = await SessionManager.instance.finalizeStoppedSession(
+        session: baseSession,
+        wavBytes: AudioDecoder.createWav(Uint8List(0)), // 44 bytes (0 PCM)
+        liveTranscript: 'Hello from live stream',
+        finishTime: DateTime.now(),
+        durationSec: 12.0,
+        apiConfigured: true,
+        saveSegments: (id, segs, {title = '', summary = '', status}) async {
+          savedSegments = segs;
+          savedStatus = status;
+          return true;
+        },
+      );
+
+      expect(result.status, SessionStatus.completed);
+      expect(result.segments, hasLength(1));
+      expect(result.segments.first.text, 'Hello from live stream');
+      expect(savedStatus, 'completed');
+      expect(savedSegments, hasLength(1));
+    });
+
+    test('finalizeStoppedSession with 0 audio and 0 transcript marks session failed in backend', () async {
+      SharedPreferences.setMockInitialValues({});
+      String? savedStatus;
+      String? savedSummary;
+
+      final baseSession = Session(
+        id: 'sess_zero_empty',
+        deviceId: 'omi_1',
+        title: 'Dropped BLE',
+        status: SessionStatus.recording,
+        startedAt: DateTime.now(),
+        createdAt: DateTime.now(),
+      );
+
+      final result = await SessionManager.instance.finalizeStoppedSession(
+        session: baseSession,
+        wavBytes: AudioDecoder.createWav(Uint8List(0)), // 44 bytes (0 PCM)
+        liveTranscript: '',
+        finishTime: DateTime.now(),
+        durationSec: 8.0,
+        apiConfigured: true,
+        saveSegments: (id, segs, {title = '', summary = '', status}) async {
+          savedStatus = status;
+          savedSummary = summary;
+          return true;
+        },
+      );
+
+      expect(result.status, SessionStatus.failed);
+      expect(savedStatus, 'failed');
+      expect(savedSummary, contains('No audio'));
     });
   });
 }
