@@ -17,232 +17,102 @@ type WebConfig struct {
 
 var DefaultWebConfig = WebConfig{}
 
-const spaTemplate = `
-<!DOCTYPE html>
-<html lang="en">
+const spaTemplate = `<!doctype html>
+<html lang="en" data-theme="system" class="lustrous-root">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Omi-Pixel Review</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎙️</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎙️</text></svg>" />
+
+  <!-- Lustrous Design System (@ghchinoy/lustrous-lit@0.2.0) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@ghchinoy/lustrous-lit@0.2.0/fonts/lustrous-fonts.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@ghchinoy/lustrous-lit@0.2.0/dist/lustrous-theme.css" />
+
   <style>
-    :root {
-      --bg: #0f172a;
-      --card-bg: #1e293b;
-      --border: #334155;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --primary: #38bdf8;
-      --accent: #6366f1;
-      --success: #22c55e;
-      --warning: #eab308;
-      --danger: #ef4444;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; }
     body {
-      background-color: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      line-height: 1.5;
-      padding: 1.5rem;
+      margin: 0;
       min-height: 100vh;
+      background-color: var(--lustrous-color-background, #0b0f17);
+      color: var(--lustrous-color-on-background, #e2e8f0);
+      font-family: var(--lustrous-font-sans, system-ui, -apple-system, sans-serif);
     }
-    .container {
-      max-width: 900px;
+    .page-shell {
+      max-width: 920px;
       margin: 0 auto;
+      padding: var(--lustrous-space-xl, 20px) var(--lustrous-space-l, 16px) var(--lustrous-space-4xl, 48px);
     }
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-bottom: 1.25rem;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 2rem;
+    .app-header {
+      border-bottom: 1px solid var(--lustrous-color-outline-variant, #334155);
+      padding-bottom: var(--lustrous-space-l, 16px);
+      margin-bottom: var(--lustrous-space-2xl, 24px);
     }
-    .logo {
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: var(--text);
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      text-decoration: none;
-      cursor: pointer;
-    }
-    .badge {
-      font-size: 0.75rem;
-      padding: 0.2rem 0.6rem;
-      border-radius: 9999px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .badge-completed { background: rgba(34, 197, 94, 0.2); color: var(--success); }
-    .badge-processing { background: rgba(234, 179, 8, 0.2); color: var(--warning); }
-    .badge-failed { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
-    .badge-recording { background: rgba(56, 189, 248, 0.2); color: var(--primary); }
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 0.75rem;
-      padding: 1.25rem;
-      margin-bottom: 1rem;
-      transition: transform 0.15s ease, border-color 0.15s ease;
-      text-decoration: none;
-      color: inherit;
-      display: block;
-      cursor: pointer;
-    }
-    .card:hover {
-      border-color: var(--primary);
-      transform: translateY(-2px);
-    }
-    .card-title {
-      font-size: 1.15rem;
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .meta {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      display: flex;
-      gap: 1.25rem;
-      flex-wrap: wrap;
-    }
-    .summary-box {
-      background: rgba(56, 189, 248, 0.08);
-      border-left: 4px solid var(--primary);
-      padding: 1rem;
-      border-radius: 0.375rem;
-      margin: 1.5rem 0;
-      font-size: 0.95rem;
-    }
-    .turn {
-      margin-bottom: 1.25rem;
-      padding: 1rem;
-      background: rgba(30, 41, 59, 0.6);
-      border-radius: 0.5rem;
-      border: 1px solid var(--border);
-      cursor: pointer;
-      transition: border-color 0.15s ease, background 0.15s ease;
-    }
-    .turn:hover {
-      border-color: var(--primary);
-      background: rgba(30, 41, 59, 0.9);
-    }
-    .turn-header {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 0.5rem;
-      font-size: 0.85rem;
-    }
-    .speaker-pill {
-      font-weight: 700;
-      padding: 0.15rem 0.5rem;
-      border-radius: 0.25rem;
-      background: rgba(255,255,255,0.1);
-    }
-    .turn-time {
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      gap: 0.3rem;
-    }
-    .turn-text {
-      font-size: 1rem;
-      line-height: 1.6;
-    }
-    .btn {
+    .brand-link {
       display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
-      background: var(--primary);
-      color: #0f172a;
-      font-weight: 600;
-      padding: 0.5rem 1rem;
-      border-radius: 0.375rem;
-      text-decoration: none;
-      border: none;
+      gap: var(--lustrous-space-s, 8px);
+      background: transparent;
+      border: 0;
+      padding: 0;
+      color: inherit;
       cursor: pointer;
-      font-size: 0.9rem;
+      text-decoration: none;
     }
-    .btn:hover {
-      filter: brightness(1.1);
+    .session-card,
+    .turn-card {
+      display: block;
+      width: 100%;
+      text-align: left;
     }
-    .btn-secondary {
-      background: var(--card-bg);
-      color: var(--text);
-      border: 1px solid var(--border);
+    .turn-card[data-active="true"] {
+      outline: 2px solid var(--lustrous-color-primary, #60a5fa);
+      outline-offset: -2px;
     }
-    .btn-secondary:hover {
-      background: var(--border);
-    }
-    .btn-danger {
-      background: rgba(239, 68, 68, 0.2);
-      color: var(--danger);
-      border: 1px solid rgba(239, 68, 68, 0.4);
-    }
-    .btn-danger:hover {
-      background: rgba(239, 68, 68, 0.3);
-    }
-    .empty-state {
-      text-align: center;
-      padding: 4rem 1rem;
-      color: var(--text-muted);
-    }
-    .auth-card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 1rem;
-      padding: 3rem 2rem;
-      text-align: center;
-      max-width: 480px;
-      margin: 4rem auto;
-    }
-    .user-pill {
+    .meta-row {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
-      gap: 0.75rem;
+      gap: var(--lustrous-space-m, 12px);
+      color: var(--lustrous-color-on-surface-variant, #94a3b8);
       font-size: 0.85rem;
-      color: var(--text-muted);
     }
-    .audio-player-card {
-      background: rgba(15, 23, 42, 0.8);
-      border: 1px solid var(--border);
-      border-radius: 0.75rem;
-      padding: 1rem 1.25rem;
-      margin: 1.5rem 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-    .audio-player-header {
-      display: flex;
-      justify-content: space-between;
+    .meta-item {
+      display: inline-flex;
       align-items: center;
-      font-size: 0.85rem;
-      color: var(--text-muted);
+      gap: 4px;
     }
     audio {
       width: 100%;
       height: 40px;
-      border-radius: 0.375rem;
-      outline: none;
+      border-radius: var(--lustrous-radius-s, 6px);
     }
-    .loading-spinner {
-      display: inline-block;
-      width: 20px;
-      height: 20px;
-      border: 2px solid rgba(255,255,255,0.2);
-      border-radius: 50%;
-      border-top-color: var(--primary);
-      animation: spin 0.8s linear infinite;
+    .code-snippet {
+      margin: 0;
+      padding: var(--lustrous-space-m, 12px);
+      border-radius: var(--lustrous-radius-m, 10px);
+      background: var(--lustrous-color-code-background, #0d131f);
+      color: var(--lustrous-color-code-primary-text, #f1f5f9);
+      font-family: var(--lustrous-font-code, monospace);
+      font-size: 0.82rem;
+      overflow-x: auto;
+      text-align: left;
     }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    .centered-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: var(--lustrous-space-4xl, 48px) var(--lustrous-space-l, 16px);
+      gap: var(--lustrous-space-m, 12px);
+    }
+    .auth-shell {
+      max-width: 480px;
+      margin: var(--lustrous-space-3xl, 32px) auto;
+    }
+    .theme-switcher {
+      min-width: 190px;
     }
   </style>
 
@@ -251,27 +121,73 @@ const spaTemplate = `
   <script src="https://www.gstatic.com/firebasejs/13.4.0/firebase-auth-compat.js"></script>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <a class="logo" onclick="navigate('/')">
-        <span>🎙️</span>
-        <span>Omi-Pixel Review</span>
-      </a>
-      <div id="header-actions">
-        <!-- Injected via JS -->
-      </div>
+  <div class="page-shell">
+    <header class="app-header">
+      <lustrous-flex align="center" justify="space-between" gap="m" wrap="wrap">
+        <button id="brand-home-btn" class="brand-link" type="button" aria-label="Omi-Pixel Review Home">
+          <lustrous-icon name="mic" tone="primary" size="l"></lustrous-icon>
+          <lustrous-text variant="title-large" heading="1">Omi-Pixel Review</lustrous-text>
+        </button>
+
+        <lustrous-flex align="center" gap="s" wrap="wrap">
+          <lustrous-segmented-control
+            id="theme-switcher"
+            class="theme-switcher"
+            label="Color theme"
+            size="s"
+          ></lustrous-segmented-control>
+          <div id="header-actions"></div>
+        </lustrous-flex>
+      </lustrous-flex>
     </header>
 
     <main id="app-view">
-      <div class="empty-state">
-        <div class="loading-spinner" style="width:32px; height:32px;"></div>
-        <p style="margin-top:1rem;">Initializing authentication...</p>
+      <div class="centered-state">
+        <lustrous-spinner size="l"></lustrous-spinner>
+        <lustrous-text variant="body-medium" muted>Initializing authentication…</lustrous-text>
       </div>
     </main>
   </div>
 
-  <script>
-    // 1. Initialize Firebase (or local AUTH_DISABLED bypass)
+  <script type="module">
+    import {
+      readLustrousThemePreference,
+      setLustrousTheme,
+    } from "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/theme";
+    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-badge";
+    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-banner";
+    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-box";
+    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-button";
+    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-dialog";
+    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-flex";
+    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-icon";
+    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-pressable";
+    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-search-bar";
+    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-segmented-control";
+    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-spinner";
+    import "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-text";
+    import { showSnack } from "https://esm.sh/@ghchinoy/lustrous-lit@0.2.0/components/lustrous-snackbar";
+
+    // 1. Theme Initialization (Light / System / Dark)
+    const THEME_STORAGE_KEY = "omi-pixel-theme";
+    const initialTheme = readLustrousThemePreference(THEME_STORAGE_KEY, "system");
+    setLustrousTheme(initialTheme, { storageKey: THEME_STORAGE_KEY });
+
+    const themeSwitcher = document.getElementById("theme-switcher");
+    if (themeSwitcher) {
+      themeSwitcher.options = [
+        { value: "light", label: "Light", icon: "lightMode" },
+        { value: "system", label: "Auto", icon: "contrast" },
+        { value: "dark", label: "Dark", icon: "darkMode" },
+      ];
+      themeSwitcher.value = initialTheme;
+      themeSwitcher.addEventListener("lustrous-change", (e) => {
+        const next = e.detail?.value || "system";
+        setLustrousTheme(next, { storageKey: THEME_STORAGE_KEY });
+      });
+    }
+
+    // 2. Firebase Auth Config
     const authDisabled = {{.AuthDisabled}};
     const firebaseConfig = {
       apiKey: "{{.APIKey}}",
@@ -282,29 +198,30 @@ const spaTemplate = `
       appId: "{{.AppID}}"
     };
 
+    const SPEAKER_TONES = ["cobalt", "emerald", "amber", "rose", "violet", "teal"];
     let auth = null;
     let currentUser = null;
     let currentIdToken = null;
+    let activePollTimer = null;
+    let cachedSessions = [];
+    let currentSearchQuery = "";
+
+    document.getElementById("brand-home-btn")?.addEventListener("click", () => navigate("/"));
 
     if (authDisabled) {
-      currentUser = { email: "dev-user@localhost", displayName: "Local Dev (Auth Disabled)" };
+      currentUser = { email: "dev-user@localhost", displayName: "Local Dev" };
       currentIdToken = "dev-bypass-token";
-      window.addEventListener("DOMContentLoaded", function() {
-        renderHeaderUser(currentUser);
-        routeView();
-      });
+      renderHeaderUser(currentUser);
+      routeView();
     } else if (!firebaseConfig.apiKey) {
-      window.addEventListener("DOMContentLoaded", function() {
-        renderConfigMissing();
-      });
+      renderConfigMissing();
     } else {
       if (!firebase.apps.length) {
         firebase.initializeApp(firebaseConfig);
       }
       auth = firebase.auth();
 
-      // 2. Auth State Observer
-      auth.onAuthStateChanged(async function(user) {
+      auth.onAuthStateChanged(async (user) => {
         currentUser = user;
         if (user) {
           try {
@@ -325,17 +242,21 @@ const spaTemplate = `
 
     function renderHeaderUser(user) {
       const el = document.getElementById("header-actions");
+      if (!el) return;
       const name = user.displayName || user.email;
-      el.innerHTML = '<div class="user-pill">' +
-        '<span title="' + escapeHtml(user.email) + '">' + escapeHtml(name) + '</span>' +
-        '<button class="btn btn-secondary" style="padding:0.35rem 0.75rem;" onclick="navigate(\'/\')">Sessions</button>' +
-        '<button class="btn btn-danger" style="padding:0.35rem 0.75rem;" onclick="signOut()">Sign Out</button>' +
-        '</div>';
+      el.innerHTML =
+        '<lustrous-flex align="center" gap="s" wrap="wrap">' +
+        '<lustrous-text variant="label-medium" muted title="' + escapeHtml(user.email) + '">' + escapeHtml(name) + '</lustrous-text>' +
+        '<lustrous-button id="nav-sessions-btn" variant="outline" size="s">Sessions</lustrous-button>' +
+        '<lustrous-button id="sign-out-btn" variant="tonal" size="s">Sign Out</lustrous-button>' +
+        '</lustrous-flex>';
+      document.getElementById("nav-sessions-btn")?.addEventListener("click", () => navigate("/"));
+      document.getElementById("sign-out-btn")?.addEventListener("click", signOut);
     }
 
     function renderHeaderGuest() {
       const el = document.getElementById("header-actions");
-      el.innerHTML = "";
+      if (el) el.innerHTML = "";
     }
 
     async function signInWithGoogle() {
@@ -349,6 +270,7 @@ const spaTemplate = `
     }
 
     async function signOut() {
+      clearPollTimer();
       if (auth) {
         await auth.signOut();
       }
@@ -356,51 +278,49 @@ const spaTemplate = `
 
     function renderConfigMissing() {
       const main = document.getElementById("app-view");
-      main.innerHTML = '<div class="auth-card">' +
-        '<div style="font-size:3rem; margin-bottom:1rem;">⚙️</div>' +
-        '<h2 style="margin-bottom:0.75rem;">Firebase Web Config Required</h2>' +
-        '<p style="color:var(--text-muted); margin-bottom:1.25rem; font-size:0.95rem;">' +
-        'Set your Firebase Web application parameters in <code>infra/.env</code> (or run <code>make run-local-noauth</code> for offline mode):' +
-        '</p>' +
-        '<pre style="text-align:left; background:#0f172a; padding:0.75rem; border-radius:0.5rem; font-size:0.8rem; color:var(--primary); overflow-x:auto;">' +
-        'FIREBASE_API_KEY=your-web-api-key\nFIREBASE_APP_ID=your-web-app-id\nFIREBASE_MESSAGING_SENDER_ID=your-sender-id</pre>' +
+      main.innerHTML =
+        '<div class="auth-shell">' +
+        '<lustrous-box background="surface-bright" border border-radius="xl" shadow="1" padding="2xl">' +
+        '<lustrous-flex direction="column" gap="m">' +
+        '<lustrous-icon name="settings" tone="primary" size="xl"></lustrous-icon>' +
+        '<lustrous-text variant="headline-small" heading="2">Firebase Web Config Required</lustrous-text>' +
+        '<lustrous-text variant="body-medium" muted>Set your Firebase Web application parameters in <code>infra/.env</code> (or run <code>make run-local-noauth</code> for offline dev):</lustrous-text>' +
+        '<pre class="code-snippet">FIREBASE_API_KEY=your-web-api-key\nFIREBASE_APP_ID=your-web-app-id\nFIREBASE_MESSAGING_SENDER_ID=your-sender-id</pre>' +
+        '</lustrous-flex>' +
+        '</lustrous-box>' +
         '</div>';
     }
 
     function renderAuthGate(errorMsg) {
       const main = document.getElementById("app-view");
-      let errorHtml = "";
-      if (errorMsg) {
-        errorHtml = '<div style="color:var(--danger); margin-bottom:1.5rem; font-size:0.9rem; padding:0.75rem; background:rgba(239,68,68,0.1); border-radius:0.5rem; border:1px solid rgba(239,68,68,0.3);">' + escapeHtml(errorMsg) + '</div>';
-      }
-      main.innerHTML = '<div class="auth-card">' +
-        '<div style="font-size:3rem; margin-bottom:1rem;">🔒</div>' +
-        '<h2 style="margin-bottom:0.75rem;">Authentication Required</h2>' +
-        '<p style="color:var(--text-muted); margin-bottom:2rem; font-size:0.95rem;">' +
-        'Sign in with your authorized Google account to view recorded Omi wearable conversations, transcripts, and audio recordings.' +
-        '</p>' +
+      const errorHtml = errorMsg
+        ? '<lustrous-banner variant="error" icon="warning">' + escapeHtml(errorMsg) + '</lustrous-banner>'
+        : "";
+      main.innerHTML =
+        '<div class="auth-shell">' +
+        '<lustrous-box background="surface-bright" border border-radius="xl" shadow="1" padding="2xl">' +
+        '<lustrous-flex direction="column" align="center" gap="l" style="text-align:center;">' +
+        '<lustrous-icon name="lock" tone="primary" size="xl"></lustrous-icon>' +
+        '<lustrous-text variant="headline-small" heading="2">Authentication Required</lustrous-text>' +
+        '<lustrous-text variant="body-medium" muted>Sign in with your authorized Google account to review Omi wearable conversations, diarized transcripts, and 16kHz WAV recordings.</lustrous-text>' +
         errorHtml +
-        '<button class="btn" style="width:100%; justify-content:center; padding:0.75rem 1.5rem; font-size:1rem;" onclick="signInWithGoogle()">' +
-        '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.761H12.545z"/></svg>' +
-        ' Sign in with Google' +
-        '</button>' +
+        '<lustrous-button id="google-signin-btn" variant="accent" icon="lock">Sign in with Google</lustrous-button>' +
+        '</lustrous-flex>' +
+        '</lustrous-box>' +
         '</div>';
+      document.getElementById("google-signin-btn")?.addEventListener("click", signInWithGoogle);
     }
 
     // 3. API Helpers
-    async function apiFetch(endpoint) {
+    async function apiRequest(endpoint, options = {}) {
       if (!currentIdToken) throw new Error("Unauthenticated");
-      const resp = await fetch(endpoint, {
-        headers: { "Authorization": "Bearer " + currentIdToken }
+      const makeHeaders = (tok) => Object.assign({}, options.headers || {}, {
+        "Authorization": "Bearer " + tok,
       });
-      if (resp.status === 401) {
-        // Try refresh token once
+      let resp = await fetch(endpoint, Object.assign({}, options, { headers: makeHeaders(currentIdToken) }));
+      if (resp.status === 401 && currentUser && typeof currentUser.getIdToken === "function") {
         currentIdToken = await currentUser.getIdToken(true);
-        const retry = await fetch(endpoint, {
-          headers: { "Authorization": "Bearer " + currentIdToken }
-        });
-        if (!retry.ok) throw new Error("API error: HTTP " + retry.status);
-        return retry.json();
+        resp = await fetch(endpoint, Object.assign({}, options, { headers: makeHeaders(currentIdToken) }));
       }
       if (resp.status === 403) {
         throw new Error("ACCESS_DENIED");
@@ -408,12 +328,15 @@ const spaTemplate = `
       if (!resp.ok) {
         throw new Error("API error: HTTP " + resp.status);
       }
+      return resp;
+    }
+
+    async function apiFetch(endpoint) {
+      const resp = await apiRequest(endpoint);
       return resp.json();
     }
 
     // 4. Views Routing
-    let activePollTimer = null;
-
     function clearPollTimer() {
       if (activePollTimer) {
         clearTimeout(activePollTimer);
@@ -441,53 +364,36 @@ const spaTemplate = `
       }
     }
 
-    // 5. List View
-    async function renderSessionList() {
+    function statusBadgeTone(status) {
+      switch (status) {
+        case "completed": return "positive";
+        case "processing": return "warning";
+        case "failed": return "error";
+        case "recording": return "cobalt";
+        default: return "default";
+      }
+    }
+
+    // 5. Session List View
+    async function renderSessionList(silent = false) {
       const main = document.getElementById("app-view");
-      main.innerHTML = '<div class="empty-state"><div class="loading-spinner"></div><p style="margin-top:1rem;">Loading conversations...</p></div>';
+      if (!silent) {
+        main.innerHTML =
+          '<div class="centered-state">' +
+          '<lustrous-spinner size="l"></lustrous-spinner>' +
+          '<lustrous-text variant="body-medium" muted>Loading conversations…</lustrous-text>' +
+          '</div>';
+      }
 
       try {
-        const sessions = await apiFetch("/api/sessions");
-        if (!sessions || sessions.length === 0) {
-          main.innerHTML = '<div class="empty-state">' +
-            '<p style="font-size: 1.25rem; margin-bottom: 0.5rem;">No recorded sessions yet.</p>' +
-            '<p>Connect your Omi device on Pixel 11 and record a conversation to view it here.</p>' +
-            '</div>';
-          return;
-        }
+        cachedSessions = (await apiFetch("/api/sessions")) || [];
+        paintSessionList();
 
-        let html = '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">' +
-          '<h2>Recorded Conversations</h2>' +
-          '<span style="color:var(--text-muted); font-size:0.9rem;">' + sessions.length + ' session(s)</span>' +
-          '</div>';
-
-        for (let i = 0; i < sessions.length; i++) {
-          const s = sessions[i];
-          const ts = s.started_at || s.created_at;
-          const dateStr = ts ? new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
-          const durStr = s.duration_seconds > 0 ? Math.round(s.duration_seconds) + "s" : "";
-          html += '<div class="card" onclick="navigate(\'/sessions/' + escapeHtml(s.id) + '\')">' +
-            '<div class="card-title">' +
-            '<span>' + escapeHtml(s.title || "Untitled Conversation") + '</span>' +
-            '<span class="badge badge-' + escapeHtml(s.status) + '">' + escapeHtml(s.status) + '</span>' +
-            '</div>' +
-            (s.summary ? '<p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:0.75rem; line-height:1.4;">' + escapeHtml(s.summary) + '</p>' : '') +
-            '<div class="meta">' +
-            '<span>🕒 ' + dateStr + '</span>' +
-            (durStr ? '<span>⏱️ ' + durStr + '</span>' : '') +
-            (s.device_id ? '<span>📱 ' + escapeHtml(s.device_id) + '</span>' : '') +
-            (s.has_audio ? '<span style="color:var(--primary);">🎵 Audio Stored</span>' : '') +
-            '</div>' +
-            '</div>';
-        }
-        main.innerHTML = html;
-
-        // Auto-refresh list while any session is still diarizing in the background
-        if (sessions.some(function(item) { return item.status === "processing"; })) {
+        if (cachedSessions.some((item) => item.status === "processing")) {
           clearPollTimer();
-          activePollTimer = setTimeout(function() {
+          activePollTimer = setTimeout(() => {
             if (window.location.pathname === "/") {
-              renderSessionList();
+              renderSessionList(true);
             }
           }, 8000);
         }
@@ -495,15 +401,132 @@ const spaTemplate = `
         if (e.message === "ACCESS_DENIED") {
           renderAccessDenied();
         } else {
-          main.innerHTML = '<div class="empty-state" style="color:var(--danger);"><p>Failed to load sessions: ' + escapeHtml(e.message) + '</p></div>';
+          main.innerHTML =
+            '<lustrous-banner variant="error" icon="warning">Failed to load sessions: ' + escapeHtml(e.message) + '</lustrous-banner>';
         }
       }
     }
 
-    // 6. Detail View with Audio Playback & Turn Seeking
-    async function renderSessionDetail(sessionId) {
+    function paintSessionList() {
       const main = document.getElementById("app-view");
-      main.innerHTML = '<div class="empty-state"><div class="loading-spinner"></div><p style="margin-top:1rem;">Loading session...</p></div>';
+      main.innerHTML =
+        '<lustrous-flex direction="column" gap="l">' +
+        '<lustrous-flex align="center" justify="space-between" gap="m" wrap="wrap">' +
+        '<lustrous-flex direction="column" gap="xs">' +
+        '<lustrous-text variant="headline-small" heading="2">Recorded Conversations</lustrous-text>' +
+        '<lustrous-text id="sessions-count" variant="body-small" muted></lustrous-text>' +
+        '</lustrous-flex>' +
+        '<lustrous-flex align="center" gap="s">' +
+        '<lustrous-search-bar id="session-search" variant="outlined" size="s" placeholder="Search transcripts & summaries…" value="' + escapeHtml(currentSearchQuery) + '"></lustrous-search-bar>' +
+        '<lustrous-button id="refresh-list-btn" variant="outline" size="s" icon="refresh">Refresh</lustrous-button>' +
+        '</lustrous-flex>' +
+        '</lustrous-flex>' +
+        '<lustrous-flex id="sessions-cards" direction="column" gap="m"></lustrous-flex>' +
+        '</lustrous-flex>';
+
+      const searchEl = document.getElementById("session-search");
+      if (searchEl) {
+        searchEl.addEventListener("input", (e) => {
+          currentSearchQuery = e.target.value || "";
+          updateSessionCards();
+        });
+        searchEl.addEventListener("lustrous-search", (e) => {
+          currentSearchQuery = e.detail?.value || "";
+          updateSessionCards();
+        });
+        searchEl.addEventListener("lustrous-clear", () => {
+          currentSearchQuery = "";
+          updateSessionCards();
+        });
+      }
+      document.getElementById("refresh-list-btn")?.addEventListener("click", () => renderSessionList());
+      updateSessionCards();
+    }
+
+    function updateSessionCards() {
+      const container = document.getElementById("sessions-cards");
+      const countEl = document.getElementById("sessions-count");
+      if (!container) return;
+
+      const q = currentSearchQuery.trim().toLowerCase();
+      const filtered = q
+        ? cachedSessions.filter((s) =>
+            (s.title || "").toLowerCase().includes(q) ||
+            (s.summary || "").toLowerCase().includes(q) ||
+            (s.device_id || "").toLowerCase().includes(q)
+          )
+        : cachedSessions;
+
+      if (countEl) {
+        countEl.textContent = filtered.length + " of " + cachedSessions.length + " session(s)";
+      }
+
+      let cardsHtml = "";
+      if (cachedSessions.length === 0) {
+        cardsHtml =
+          '<lustrous-box background="surface-container" border border-radius="l" padding="2xl">' +
+          '<div class="centered-state">' +
+          '<lustrous-icon name="micOff" size="xl"></lustrous-icon>' +
+          '<lustrous-text variant="title-medium" heading="3">No recorded sessions yet</lustrous-text>' +
+          '<lustrous-text variant="body-medium" muted>Connect your Omi wearable on Pixel and record a conversation to review it here.</lustrous-text>' +
+          '</div>' +
+          '</lustrous-box>';
+      } else if (filtered.length === 0) {
+        cardsHtml =
+          '<lustrous-box background="surface-container" border border-radius="l" padding="xl">' +
+          '<div class="centered-state">' +
+          '<lustrous-text variant="body-medium" muted>No conversations match "' + escapeHtml(currentSearchQuery) + '".</lustrous-text>' +
+          '</div>' +
+          '</lustrous-box>';
+      } else {
+        for (const s of filtered) {
+          const ts = s.started_at || s.created_at;
+          const dateStr = ts
+            ? new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+            : "-";
+          const durStr = s.duration_seconds > 0 ? Math.round(s.duration_seconds) + "s" : "";
+          const tone = statusBadgeTone(s.status);
+
+          cardsHtml +=
+            '<lustrous-pressable class="session-card" data-session-id="' + escapeHtml(s.id) + '" background="surface-bright" border border-radius="l" padding="l" shadow="1">' +
+            '<lustrous-flex direction="column" gap="s">' +
+            '<lustrous-flex align="center" justify="space-between" gap="m">' +
+            '<lustrous-text variant="title-medium" max-lines="1">' + escapeHtml(s.title || "Untitled Conversation") + '</lustrous-text>' +
+            '<lustrous-badge tone="' + tone + '">' + escapeHtml((s.status || "unknown").toUpperCase()) + '</lustrous-badge>' +
+            '</lustrous-flex>' +
+            (s.summary
+              ? '<lustrous-text variant="body-medium" muted max-lines="2">' + escapeHtml(s.summary) + '</lustrous-text>'
+              : "") +
+            '<div class="meta-row">' +
+            '<span class="meta-item"><lustrous-icon name="clock" size="xs"></lustrous-icon>' + escapeHtml(dateStr) + '</span>' +
+            (durStr ? '<span class="meta-item">' + escapeHtml(durStr) + '</span>' : "") +
+            (s.device_id ? '<span class="meta-item"><lustrous-icon name="smartphone" size="xs"></lustrous-icon>' + escapeHtml(s.device_id) + '</span>' : "") +
+            (s.has_audio ? '<span class="meta-item"><lustrous-icon name="volumeUp" size="xs" tone="primary"></lustrous-icon>16kHz WAV</span>' : "") +
+            '</div>' +
+            '</lustrous-flex>' +
+            '</lustrous-pressable>';
+        }
+      }
+
+      container.innerHTML = cardsHtml;
+      container.querySelectorAll(".session-card").forEach((card) => {
+        card.addEventListener("click", () => {
+          const sid = card.getAttribute("data-session-id");
+          if (sid) navigate("/sessions/" + sid);
+        });
+      });
+    }
+
+    // 6. Session Detail View
+    async function renderSessionDetail(sessionId, silent = false) {
+      const main = document.getElementById("app-view");
+      if (!silent) {
+        main.innerHTML =
+          '<div class="centered-state">' +
+          '<lustrous-spinner size="l"></lustrous-spinner>' +
+          '<lustrous-text variant="body-medium" muted>Loading conversation…</lustrous-text>' +
+          '</div>';
+      }
 
       try {
         const detail = await apiFetch("/api/sessions/" + sessionId);
@@ -514,131 +537,176 @@ const spaTemplate = `
         const dateStr = ts ? new Date(ts).toLocaleString() : "-";
         const durStr = s.duration_seconds > 0 ? s.duration_seconds.toFixed(1) + "s" : "";
 
-        let html = '<div style="margin-bottom: 1.5rem;">' +
-          '<a onclick="navigate(\'/\')" style="color:var(--primary); text-decoration:none; font-size:0.9rem; cursor:pointer;">← Back to Sessions</a>' +
-          '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-top:0.75rem;">' +
-          '<div>' +
-          '<h1 style="font-size: 1.75rem; margin-bottom:0.25rem;">' + escapeHtml(s.title || "Conversation Session") + '</h1>' +
-          '<div class="meta">' +
-          '<span>Recorded: ' + dateStr + '</span>' +
-          (durStr ? '<span>Duration: ' + durStr + '</span>' : '') +
-          (s.language ? '<span>Language: ' + escapeHtml(s.language) + '</span>' : '') +
-          '</div>' +
-          '</div>' +
-          '<div style="display:flex; align-items:center; gap:0.5rem;">' +
-          '<span class="badge badge-' + escapeHtml(s.status) + '">' + escapeHtml(s.status) + '</span>' +
-          '<button class="btn btn-danger" style="padding:0.25rem 0.65rem; font-size:0.8rem;" onclick="deleteSession(\'' + escapeHtml(sessionId) + '\')">Delete</button>' +
-          '</div>' +
-          '</div>' +
-          '</div>';
-
-        // Audio Player Card
-        html += '<div class="audio-player-card" id="audio-player-container">' +
-          '<div class="audio-player-header">' +
-          '<span>🎵 Session Recording (16kHz WAV)</span>' +
-          '<span id="audio-status-text">Click play or tap any turn to listen</span>' +
-          '</div>' +
-          '<audio id="session-audio-player" controls preload="metadata"></audio>' +
-          '</div>';
-
+        let statusBannerHtml = "";
         if (s.status === "processing") {
-          html += '<div class="summary-box" style="border-left-color:var(--warning); background:rgba(234,179,8,0.08); display:flex; align-items:center; gap:0.75rem;">' +
-            '<div class="loading-spinner"></div>' +
-            '<div>' +
-            '<strong>Diarizing in Background…</strong>' +
-            '<p style="margin-top:0.25rem; color:var(--text-muted); font-size:0.9rem;">Gemini 3.5 Transcribe is separating speakers and generating a summary. This page refreshes automatically.</p>' +
-            '</div>' +
-            '</div>';
+          statusBannerHtml =
+            '<lustrous-banner variant="warning" heading="Diarizing in Background…">' +
+            '<lustrous-flex align="center" gap="m">' +
+            '<lustrous-spinner size="s"></lustrous-spinner>' +
+            '<lustrous-text variant="body-medium">Gemini 3.5 Transcribe is separating speakers and generating a summary. This page refreshes automatically.</lustrous-text>' +
+            '</lustrous-flex>' +
+            '</lustrous-banner>';
         } else if (s.status === "failed" && s.has_audio) {
-          html += '<div class="summary-box" style="border-left-color:var(--danger); background:rgba(239,68,68,0.08); display:flex; justify-content:space-between; align-items:center; gap:1rem;">' +
-            '<div><strong>Diarization Failed</strong><p style="margin-top:0.25rem; color:var(--text-muted); font-size:0.9rem;">Audio is safely stored in Cloud Storage.</p></div>' +
-            '<button class="btn" onclick="reprocessSession(\'' + escapeHtml(sessionId) + '\')">Retry Diarization</button>' +
-            '</div>';
+          statusBannerHtml =
+            '<lustrous-banner id="retry-diarize-banner" variant="error" icon="warning" heading="Diarization Failed" primary-action="Retry Diarization">' +
+            'Audio is safely stored in Cloud Storage. Retry diarization whenever ready.' +
+            '</lustrous-banner>';
         }
 
-        if (s.summary) {
-          html += '<div class="summary-box">' +
-            '<strong>✨ AI Summary</strong>' +
-            '<p style="margin-top:0.5rem; line-height:1.5;">' + escapeHtml(s.summary) + '</p>' +
-            '</div>';
-        }
+        const summaryHtml = s.summary
+          ? '<lustrous-banner variant="info" icon="chatSpark2" heading="AI Summary">' + escapeHtml(s.summary) + '</lustrous-banner>'
+          : "";
 
-        html += '<h3 style="margin-bottom: 1rem;">Diarized Transcript (' + segs.length + ' turns)</h3>';
-
+        let turnsHtml = "";
         if (segs.length === 0) {
-          html += '<div class="empty-state"><p>' +
-            (s.status === "processing" ? 'Waiting for diarized speaker turns…' : 'No diarized segments available yet.') +
-            '</p></div>';
+          turnsHtml =
+            '<lustrous-box background="surface-container" border border-radius="l" padding="xl">' +
+            '<div class="centered-state">' +
+            '<lustrous-text variant="body-medium" muted>' +
+            (s.status === "processing" ? "Waiting for diarized speaker turns…" : "No diarized segments available yet.") +
+            '</lustrous-text>' +
+            '</div>' +
+            '</lustrous-box>';
         } else {
-          html += '<div id="transcript-turns">';
-          const colors = ["#38bdf8", "#10b981", "#f59e0b", "#ec4899", "#8b5cf6", "#06b6d4"];
-          for (let i = 0; i < segs.length; i++) {
-            const seg = segs[i];
-            const spkColor = colors[Math.abs(seg.speaker_id || 0) % colors.length];
-            html += '<div class="turn" onclick="seekAudio(' + seg.start + ')">' +
-              '<div class="turn-header">' +
-              '<span class="speaker-pill" style="color:' + spkColor + '; border:1px solid ' + spkColor + '66;">' + escapeHtml(seg.speaker) + '</span>' +
-              '<span class="turn-time">▶ ' + seg.start.toFixed(1) + 's - ' + seg.end.toFixed(1) + 's</span>' +
-              '</div>' +
-              '<div class="turn-text">' + escapeHtml(seg.text) + '</div>' +
-              '</div>';
+          for (const seg of segs) {
+            const tone = SPEAKER_TONES[Math.abs(seg.speaker_id || 0) % SPEAKER_TONES.length];
+            turnsHtml +=
+              '<lustrous-pressable class="turn-card" data-start="' + seg.start + '" background="surface-bright" border border-radius="l" padding="l">' +
+              '<lustrous-flex direction="column" gap="s">' +
+              '<lustrous-flex align="center" justify="space-between" gap="m">' +
+              '<lustrous-badge tone="' + tone + '">' + escapeHtml(seg.speaker) + '</lustrous-badge>' +
+              '<span class="meta-item"><lustrous-icon name="playArrow" size="xs"></lustrous-icon>' + seg.start.toFixed(1) + 's – ' + seg.end.toFixed(1) + 's</span>' +
+              '</lustrous-flex>' +
+              '<lustrous-text variant="body-large">' + escapeHtml(seg.text) + '</lustrous-text>' +
+              '</lustrous-flex>' +
+              '</lustrous-pressable>';
           }
-          html += '</div>';
         }
 
-        main.innerHTML = html;
+        main.innerHTML =
+          '<lustrous-flex direction="column" gap="l">' +
+          '<lustrous-flex align="center" justify="space-between" gap="m" wrap="wrap">' +
+          '<lustrous-button id="back-sessions-btn" variant="on-surface-variant" size="s" icon="arrowBack">Back to Sessions</lustrous-button>' +
+          '<lustrous-flex align="center" gap="s">' +
+          '<lustrous-button id="copy-transcript-btn" variant="outline" size="s" icon="copy">Copy</lustrous-button>' +
+          '<lustrous-dialog id="delete-dialog" modal dismissible heading="Delete Conversation?" primary-action="Delete" secondary-action="Cancel">' +
+          '<lustrous-button slot="trigger" variant="tonal" size="s" icon="delete">Delete</lustrous-button>' +
+          'This permanently deletes the recording transcript, speaker turns, and stored 16kHz WAV audio.' +
+          '</lustrous-dialog>' +
+          '</lustrous-flex>' +
+          '</lustrous-flex>' +
 
-        // Load Audio Stream into Player with Auth Bearer
+          '<lustrous-box background="surface-bright" border border-radius="xl" padding="xl" shadow="1">' +
+          '<lustrous-flex direction="column" gap="s">' +
+          '<lustrous-flex align="center" justify="space-between" gap="m" wrap="wrap">' +
+          '<lustrous-text variant="headline-medium" heading="2">' + escapeHtml(s.title || "Conversation Session") + '</lustrous-text>' +
+          '<lustrous-badge tone="' + statusBadgeTone(s.status) + '">' + escapeHtml((s.status || "unknown").toUpperCase()) + '</lustrous-badge>' +
+          '</lustrous-flex>' +
+          '<div class="meta-row">' +
+          '<span class="meta-item"><lustrous-icon name="clock" size="xs"></lustrous-icon>' + escapeHtml(dateStr) + '</span>' +
+          (durStr ? '<span class="meta-item">Duration: ' + escapeHtml(durStr) + '</span>' : "") +
+          (s.language ? '<span class="meta-item">Language: ' + escapeHtml(s.language) + '</span>' : "") +
+          '</div>' +
+          '</lustrous-flex>' +
+          '</lustrous-box>' +
+
+          statusBannerHtml +
+
+          '<lustrous-box id="audio-player-container" background="surface-container" border border-radius="l" padding="l">' +
+          '<lustrous-flex direction="column" gap="s">' +
+          '<lustrous-flex align="center" justify="space-between" gap="m">' +
+          '<lustrous-flex align="center" gap="s">' +
+          '<lustrous-icon name="volumeUp" tone="primary" size="s"></lustrous-icon>' +
+          '<lustrous-text variant="title-small">Session Recording (16kHz WAV)</lustrous-text>' +
+          '</lustrous-flex>' +
+          '<lustrous-text id="audio-status-text" variant="body-small" muted>Click play or select any turn to listen</lustrous-text>' +
+          '</lustrous-flex>' +
+          '<audio id="session-audio-player" controls preload="metadata"></audio>' +
+          '</lustrous-flex>' +
+          '</lustrous-box>' +
+
+          summaryHtml +
+
+          '<lustrous-text variant="title-large" heading="3">Diarized Transcript (' + segs.length + ' turns)</lustrous-text>' +
+          '<lustrous-flex id="transcript-turns" direction="column" gap="m">' + turnsHtml + '</lustrous-flex>' +
+          '</lustrous-flex>';
+
+        // Wire event listeners (zero inline onclick)
+        document.getElementById("back-sessions-btn")?.addEventListener("click", () => navigate("/"));
+        document.getElementById("copy-transcript-btn")?.addEventListener("click", () => {
+          copyTranscriptToClipboard(s, segs);
+        });
+        document.getElementById("retry-diarize-banner")?.addEventListener("lustrous-action", (e) => {
+          if (e.detail?.action === "primary") {
+            reprocessSession(sessionId);
+          }
+        });
+        document.getElementById("delete-dialog")?.addEventListener("lustrous-action", async (e) => {
+          if (e.detail?.action === "primary") {
+            await deleteSession(sessionId);
+          }
+        });
+        main.querySelectorAll(".turn-card").forEach((card) => {
+          card.addEventListener("click", () => {
+            const start = parseFloat(card.getAttribute("data-start") || "0");
+            seekAudio(start);
+          });
+        });
+
         loadAudioPlayer(sessionId);
 
-        // Auto-poll while session is processing
         if (s.status === "processing") {
           clearPollTimer();
-          activePollTimer = setTimeout(function() {
+          activePollTimer = setTimeout(() => {
             if (window.location.pathname === "/sessions/" + sessionId) {
-              renderSessionDetail(sessionId);
+              renderSessionDetail(sessionId, true);
             }
           }, 5000);
         }
-
       } catch (e) {
         if (e.message === "ACCESS_DENIED") {
           renderAccessDenied();
         } else {
-          main.innerHTML = '<div class="empty-state" style="color:var(--danger);"><p>Failed to load conversation: ' + escapeHtml(e.message) + '</p></div>';
+          main.innerHTML =
+            '<lustrous-banner variant="error" icon="warning">Failed to load conversation: ' + escapeHtml(e.message) + '</lustrous-banner>';
         }
+      }
+    }
+
+    async function copyTranscriptToClipboard(session, segs) {
+      const lines = ["Title: " + (session.title || "Conversation")];
+      if (session.summary) {
+        lines.push("", "Summary:", session.summary, "");
+      }
+      lines.push("Transcript:");
+      for (const seg of segs) {
+        lines.push("[" + seg.start.toFixed(1) + "s] " + seg.speaker + ": " + seg.text);
+      }
+      try {
+        await navigator.clipboard.writeText(lines.join("\n"));
+        showSnack("Transcript copied to clipboard", { variant: "positive" });
+      } catch (e) {
+        showSnack("Failed to copy transcript", { variant: "error" });
       }
     }
 
     async function reprocessSession(sessionId) {
       try {
-        await fetch("/api/sessions/" + sessionId + "/reprocess?async=true", {
-          method: "POST",
-          headers: { "Authorization": "Bearer " + currentIdToken }
-        });
+        await apiRequest("/api/sessions/" + sessionId + "/reprocess?async=true", { method: "POST" });
+        showSnack("Re-diarization started in background", { variant: "positive" });
         renderSessionDetail(sessionId);
       } catch (e) {
-        console.error("Failed to trigger reprocess", e);
+        showSnack("Failed to retry diarization: " + e.message, { variant: "error" });
       }
     }
 
     async function deleteSession(sessionId) {
-      if (!confirm("Delete this recording, transcript, and stored audio permanently?")) {
-        return;
-      }
       try {
-        const resp = await fetch("/api/sessions/" + sessionId, {
-          method: "DELETE",
-          headers: { "Authorization": "Bearer " + currentIdToken }
-        });
-        if (!resp.ok) {
-          alert("Failed to delete session (HTTP " + resp.status + ")");
-          return;
-        }
+        await apiRequest("/api/sessions/" + sessionId, { method: "DELETE" });
+        showSnack("Conversation deleted", { variant: "positive" });
         navigate("/");
       } catch (e) {
-        console.error("Failed to delete session", e);
-        alert("Failed to delete session: " + e.message);
+        showSnack("Failed to delete session: " + e.message, { variant: "error" });
       }
     }
 
@@ -648,9 +716,8 @@ const spaTemplate = `
       if (!player) return;
 
       try {
-        const audioUrl = "/api/sessions/" + sessionId + "/audio";
-        const resp = await fetch(audioUrl, {
-          headers: { "Authorization": "Bearer " + currentIdToken }
+        const resp = await fetch("/api/sessions/" + sessionId + "/audio", {
+          headers: { "Authorization": "Bearer " + currentIdToken },
         });
 
         if (resp.status === 404) {
@@ -684,34 +751,37 @@ const spaTemplate = `
 
     function renderAccessDenied() {
       const main = document.getElementById("app-view");
-      const email = currentUser ? currentUser.email : '';
-      main.innerHTML = '<div class="auth-card" style="border-color:rgba(239,68,68,0.4);">' +
-        '<div style="font-size:3rem; margin-bottom:1rem;">🚫</div>' +
-        '<h2 style="margin-bottom:0.75rem; color:var(--danger);">Access Denied</h2>' +
-        '<p style="color:var(--text-muted); margin-bottom:1.5rem; font-size:0.95rem;">' +
-        'Your account (<strong>' + escapeHtml(email) + '</strong>) is authenticated, but is not on the authorized users allowlist.' +
-        '</p>' +
-        '<p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:2rem;">' +
-        'To grant access, run:<br>' +
-        '<code style="background:#0f172a; padding:0.25rem 0.5rem; border-radius:0.25rem; display:inline-block; margin-top:0.5rem;">make authorize EMAIL=' + (email || 'you@gmail.com') + '</code>' +
-        '</p>' +
-        '<button class="btn btn-secondary" onclick="signOut()">Sign Out</button>' +
+      const email = currentUser ? currentUser.email : "";
+      main.innerHTML =
+        '<div class="auth-shell">' +
+        '<lustrous-box background="surface-bright" border border-radius="xl" shadow="1" padding="2xl">' +
+        '<lustrous-flex direction="column" align="center" gap="m" style="text-align:center;">' +
+        '<lustrous-icon name="warning" tone="error" size="xl"></lustrous-icon>' +
+        '<lustrous-text variant="headline-small" heading="2">Access Denied</lustrous-text>' +
+        '<lustrous-text variant="body-medium" muted>Your account (' + escapeHtml(email) + ') is authenticated, but is not on the authorized users allowlist.</lustrous-text>' +
+        '<pre class="code-snippet">make authorize EMAIL=' + escapeHtml(email || "you@gmail.com") + '</pre>' +
+        '<lustrous-button id="denied-signout-btn" variant="outline">Sign Out</lustrous-button>' +
+        '</lustrous-flex>' +
+        '</lustrous-box>' +
         '</div>';
+      document.getElementById("denied-signout-btn")?.addEventListener("click", signOut);
     }
 
     function escapeHtml(str) {
       if (!str) return "";
-      return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
     }
   </script>
 </body>
 </html>
 `
 
+// ParseTemplates returns the parsed SPA HTML template.
 func ParseTemplates() (*template.Template, error) {
-	tmpl, err := template.New("spa").Parse(spaTemplate)
-	if err != nil {
-		return nil, err
-	}
-	return tmpl, nil
+	return template.New("spa").Parse(spaTemplate)
 }

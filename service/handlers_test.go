@@ -122,6 +122,17 @@ func TestServerHealthAndSessions(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Errorf("GET / status = %d, want %d", rec.Code, http.StatusOK)
 	}
+	webBody := rec.Body.String()
+	for _, marker := range []string{
+		`class="lustrous-root"`,
+		`data-theme="system"`,
+		`@ghchinoy/lustrous-lit@0.2.0`,
+		`<lustrous-segmented-control`,
+	} {
+		if !bytes.Contains([]byte(webBody), []byte(marker)) {
+			t.Errorf("GET / body missing Lustrous marker %q", marker)
+		}
+	}
 
 	// 6. Test Web Session Detail Render
 	req = httptest.NewRequest(http.MethodGet, "/sessions/test-session-123", nil)
