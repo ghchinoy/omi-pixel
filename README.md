@@ -30,7 +30,7 @@ A standalone, self-hosted **Flutter companion app for Google Pixel** and **Go Cl
 
 | 1. Connect & Quick-Switch Mode | 2. Live Smart Stream & Audio Health | 3. Diarized Turns & Tap-to-Seek |
 | :---: | :---: | :---: |
-| <img src="docs/screenshots/mobile-home.webp" width="260" alt="Omi Pixel Home Screen"> | <img src="docs/screenshots/mobile-live.webp" width="260" alt="Omi Pixel Live Transcription"> | <img src="docs/screenshots/mobile-detail.webp" width="260" alt="Omi Pixel Diarized Detail"> |
+| <picture><source media="(prefers-color-scheme: light)" srcset="docs/screenshots/mobile-home-light.webp"><img src="docs/screenshots/mobile-home.webp" width="260" alt="Omi Pixel Home Screen"></picture> | <picture><source media="(prefers-color-scheme: light)" srcset="docs/screenshots/mobile-live-light.webp"><img src="docs/screenshots/mobile-live.webp" width="260" alt="Omi Pixel Live Transcription"></picture> | <picture><source media="(prefers-color-scheme: light)" srcset="docs/screenshots/mobile-detail-light.webp"><img src="docs/screenshots/mobile-detail.webp" width="260" alt="Omi Pixel Diarized Detail"></picture> |
 | *BLE status, battery, background `DIARIZING`, & hold-to-switch mode* | *Sub-second `gemini-3.5-transcribe-live` + live PCM health pill* | *Lustrous speaker badges, Gemini 4 Hydrogen summary, & WAV seek* |
 
 <p align="center">
@@ -43,7 +43,7 @@ Every deployment serves a responsive **Lustrous Design System** Web Review SPA (
 
 | Session History & Search | Synchronized WAV Player & Speaker Turns |
 | :---: | :---: |
-| <img src="docs/screenshots/web-dashboard.webp" width="440" alt="Omi Pixel Web Review Dashboard"> | <img src="docs/screenshots/web-session-detail.webp" width="440" alt="Omi Pixel Web Session Detail"> |
+| <picture><source media="(prefers-color-scheme: light)" srcset="docs/screenshots/web-dashboard-light.webp"><img src="docs/screenshots/web-dashboard.webp" width="440" alt="Omi Pixel Web Review Dashboard"></picture> | <picture><source media="(prefers-color-scheme: light)" srcset="docs/screenshots/web-session-detail-light.webp"><img src="docs/screenshots/web-session-detail.webp" width="440" alt="Omi Pixel Web Session Detail"></picture> |
 
 ---
 
