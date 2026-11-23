@@ -1,6 +1,6 @@
 # 🎙️ Omi-Pixel
 
-[![Version](https://img.shields.io/badge/version-0.3.3-38bdf8?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.4-38bdf8?style=flat-square)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Google%20Pixel%20%7C%20Android-22c55e?style=flat-square)](#supported-hardware--audio-codecs)
 [![Backend](https://img.shields.io/badge/backend-Go%201.26%20%7C%20Cloud%20Run-0284c7?style=flat-square)](#architecture)
 [![AI](https://img.shields.io/badge/Vertex%20AI-Gemini%203.5%20Transcribe%20%2B%204%20Hydrogen-6366f1?style=flat-square)](#why-omi-pixel)

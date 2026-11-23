@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-11-23
+
+### Added
+- **Gemini 4 Hydrogen Summary Model & Settings Selector**: Switched default `SUMMARY_MODEL` to `gemini-4-hydrogen` (`thinkingLevel: LOW` with plain-text guidance), added a **Summary Generation Model** selector in `SettingsScreen` (`Gemini 4 Hydrogen (Default)` / `Gemini 3.8 Flash (Faster)`), and added server-side allowlist validation (`ResolveSummaryModel`) for optional `?summary_model=...` overrides on upload and reprocess endpoints `[omi-pixel-m6s, omi-pixel-na4]`.
+- **LiveProxy Orphan PCM Recovery & Session Deletion**: Added a 32 MB-capped fallback PCM buffer in `LiveProxy` that recovers interrupted recordings to GCS WAV and transitions abandoned sessions out of `recording`, plus authenticated `DELETE /api/sessions/{id}` (deleting Firestore doc, segments subcollection via `BulkWriter`, and GCS WAV) exposed in both the Web Review SPA and Flutter `SessionDetailScreen` `[omi_pixel-zhl]`.
+
+### Fixed
+- **Auto-Dismiss Diarization SnackBars**: Set `persist: false` and `clearSnackBars()` on action SnackBars in `LiveScreen` and `HomeScreen` so background diarization notifications auto-dismiss cleanly after 5 seconds instead of staying pinned.
+
+### Security
+- **Eliminated Firebase JWT Leak in `/api/live` Query String**: Moved Firebase ID token authentication on `/api/live` from `?access_token=<jwt>` to the `Authorization: Bearer` WebSocket upgrade header in `GeminiLiveService` and removed query-string token acceptance in `service/auth.go` so JWTs are never logged in Cloud Run HTTP request logs `[omi_pixel-p4l]`.
+
 ## [0.3.3] - 2026-11-23
 
 ### Added
@@ -76,7 +88,8 @@ _Initial release._
 - Audio playback cards with turn tap-to-seek synchronization on both mobile and web clients.
 - Infrastructure automation scripts (`infra/`) and top-level `Makefile`.
 
-[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.0...v0.3.1
