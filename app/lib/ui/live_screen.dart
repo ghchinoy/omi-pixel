@@ -15,7 +15,9 @@ class _LiveScreenState extends State<LiveScreen> with SingleTickerProviderStateM
   final ScrollController _scrollController = ScrollController();
   late AnimationController _pulseController;
   StreamSubscription? _transcriptSub;
+  StreamSubscription? _warningSub;
   bool _stopping = false;
+  String? _foregroundWarning;
 
   @override
   void initState() {
@@ -24,6 +26,19 @@ class _LiveScreenState extends State<LiveScreen> with SingleTickerProviderStateM
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
+
+    _foregroundWarning = SessionManager.instance.lastForegroundServiceError;
+    _warningSub = SessionManager.instance.warningStream.listen((msg) {
+      if (!mounted) return;
+      setState(() => _foregroundWarning = msg);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: Colors.orange.shade800,
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    });
 
     _transcriptSub = SessionManager.instance.transcriptStream.listen((_) {
       _scrollToBottom();
@@ -46,6 +61,7 @@ class _LiveScreenState extends State<LiveScreen> with SingleTickerProviderStateM
   void dispose() {
     _pulseController.dispose();
     _transcriptSub?.cancel();
+    _warningSub?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -97,6 +113,24 @@ class _LiveScreenState extends State<LiveScreen> with SingleTickerProviderStateM
       body: SafeArea(
         child: Column(
           children: [
+            if (_foregroundWarning != null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                color: Colors.amber.withValues(alpha: 0.16),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _foregroundWarning!,
+                        style: theme.textTheme.bodySmall?.copyWith(color: Colors.amber.shade200),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             // Timer & Status Banner
             Container(
               padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),

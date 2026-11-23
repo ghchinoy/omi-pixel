@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -42,6 +42,12 @@ class SessionManager {
   final _sessionsController = StreamController<List<Session>>.broadcast();
   Stream<List<Session>> get sessionsStream => _sessionsController.stream;
 
+  final _warningController = StreamController<String>.broadcast();
+  Stream<String> get warningStream => _warningController.stream;
+
+  String? _lastForegroundServiceError;
+  String? get lastForegroundServiceError => _lastForegroundServiceError;
+
   Timer? _durationTimer;
   int _elapsedSeconds = 0;
   int get elapsedSeconds => _elapsedSeconds;
@@ -72,13 +78,82 @@ class SessionManager {
         playSound: false,
       ),
       foregroundTaskOptions: ForegroundTaskOptions(
-        eventAction: ForegroundTaskEventAction.repeat(5000),
+        eventAction: ForegroundTaskEventAction.nothing(),
         autoRunOnBoot: false,
         autoRunOnMyPackageReplaced: false,
         allowWakeLock: true,
         allowWifiLock: true,
       ),
     );
+  }
+
+  /// Starts (or restarts) the Android foreground service for active BLE recording.
+  ///
+  /// Uses [ForegroundServiceTypes.connectedDevice] at runtime so Android 14+ does
+  /// not require RECORD_AUDIO when capturing exclusively from an Omi BLE wearable.
+  /// Any failure is logged via [debugPrint] and surfaced on [warningStream].
+  @visibleForTesting
+  Future<bool> startForegroundRecordingService({
+    Future<NotificationPermission> Function()? checkNotificationPermission,
+    Future<NotificationPermission> Function()? requestNotificationPermission,
+    Future<bool> Function()? isRunningService,
+    Future<ServiceRequestResult> Function()? restartService,
+    Future<ServiceRequestResult> Function()? startService,
+  }) async {
+    _lastForegroundServiceError = null;
+    try {
+      final checkPerm =
+          checkNotificationPermission ?? FlutterForegroundTask.checkNotificationPermission;
+      final reqPerm =
+          requestNotificationPermission ?? FlutterForegroundTask.requestNotificationPermission;
+      if (await checkPerm() != NotificationPermission.granted) {
+        await reqPerm();
+      }
+
+      final running = await (isRunningService ?? () => FlutterForegroundTask.isRunningService)();
+      final ServiceRequestResult result;
+      if (running) {
+        result = await (restartService ?? FlutterForegroundTask.restartService)();
+      } else {
+        result = await (startService ??
+            () => FlutterForegroundTask.startService(
+                  serviceId: 256,
+                  serviceTypes: const [ForegroundServiceTypes.connectedDevice],
+                  notificationTitle: 'Omi Recording Active',
+                  notificationText: 'Streaming and transcribing conversation...',
+                ))();
+      }
+
+      if (result is ServiceRequestFailure) {
+        final msg = 'Background recording service failed to start: ${result.error}';
+        _lastForegroundServiceError = msg;
+        debugPrint('[SessionManager] $msg');
+        _warningController.add(msg);
+        return false;
+      }
+
+      debugPrint('[SessionManager] Foreground recording service started.');
+      return true;
+    } catch (e, st) {
+      final msg = 'Background recording service error: $e';
+      _lastForegroundServiceError = msg;
+      debugPrint('[SessionManager] $msg\n$st');
+      _warningController.add(msg);
+      return false;
+    }
+  }
+
+  Future<void> _stopForegroundRecordingService() async {
+    try {
+      if (await FlutterForegroundTask.isRunningService) {
+        final result = await FlutterForegroundTask.stopService();
+        if (result is ServiceRequestFailure) {
+          debugPrint('[SessionManager] Foreground service failed to stop: ${result.error}');
+        }
+      }
+    } catch (e) {
+      debugPrint('[SessionManager] Error stopping foreground service: $e');
+    }
   }
 
   Future<bool> startRecording() async {
@@ -142,18 +217,8 @@ class SessionManager {
       }
     }
 
-    // 3. Start Foreground notification
-    try {
-      if (await FlutterForegroundTask.isRunningService) {
-        FlutterForegroundTask.restartService();
-      } else {
-        FlutterForegroundTask.startService(
-          serviceId: 256,
-          notificationTitle: 'Omi Recording Active',
-          notificationText: 'Streaming and transcribing conversation...',
-        );
-      }
-    } catch (_) {}
+    // 3. Start Foreground notification service so Android keeps BLE/WS alive in background
+    await startForegroundRecordingService();
 
     // 4. Start timer
     _durationTimer?.cancel();
@@ -190,9 +255,7 @@ class SessionManager {
     _geminiTranscriptSub = null;
     await _geminiLive.disconnect();
 
-    try {
-      FlutterForegroundTask.stopService();
-    } catch (_) {}
+    await _stopForegroundRecordingService();
 
     if (_activeSession == null) return null;
 

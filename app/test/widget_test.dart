@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +10,7 @@ import 'package:omi_pixel/models/device.dart';
 import 'package:omi_pixel/models/segment.dart';
 import 'package:omi_pixel/models/session.dart';
 import 'package:omi_pixel/services/audio_decoder.dart';
+import 'package:omi_pixel/services/session_manager.dart';
 import 'package:omi_pixel/services/settings_service.dart';
 import 'package:omi_pixel/ui/session_detail_screen.dart';
 
@@ -146,6 +149,68 @@ void main() {
       expect(find.text('Speaker 2'), findsOneWidget);
       expect(find.text('Let us deploy the Go service on Cloud Run.'), findsOneWidget);
       expect(find.text('And connect the Omi hardware over BLE.'), findsOneWidget);
+    });
+  });
+
+  group('Background Foreground Service Tests', () {
+    test('AndroidManifest registers ForegroundService with connectedDevice|microphone', () {
+      final manifest = File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+      expect(
+        manifest,
+        contains('android:name="com.pravera.flutter_foreground_task.service.ForegroundService"'),
+      );
+      expect(
+        manifest,
+        contains('android:foregroundServiceType="connectedDevice|microphone"'),
+      );
+      expect(manifest, contains('android:exported="false"'));
+    });
+
+    test('startForegroundRecordingService succeeds and clears previous error', () async {
+      final ok = await SessionManager.instance.startForegroundRecordingService(
+        checkNotificationPermission: () async => NotificationPermission.granted,
+        isRunningService: () async => false,
+        startService: () async => const ServiceRequestSuccess(),
+      );
+
+      expect(ok, isTrue);
+      expect(SessionManager.instance.lastForegroundServiceError, isNull);
+    });
+
+    test('startForegroundRecordingService surfaces ServiceRequestFailure via warningStream', () async {
+      final warnings = <String>[];
+      final sub = SessionManager.instance.warningStream.listen(warnings.add);
+      addTearDown(sub.cancel);
+
+      final ok = await SessionManager.instance.startForegroundRecordingService(
+        checkNotificationPermission: () async => NotificationPermission.granted,
+        isRunningService: () async => false,
+        startService: () async => ServiceRequestFailure(error: Exception('FGS denied')),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      expect(ok, isFalse);
+      expect(SessionManager.instance.lastForegroundServiceError, contains('FGS denied'));
+      expect(warnings, hasLength(1));
+      expect(warnings.first, contains('FGS denied'));
+    });
+
+    test('startForegroundRecordingService surfaces thrown exception instead of swallowing', () async {
+      final warnings = <String>[];
+      final sub = SessionManager.instance.warningStream.listen(warnings.add);
+      addTearDown(sub.cancel);
+
+      final ok = await SessionManager.instance.startForegroundRecordingService(
+        checkNotificationPermission: () async => NotificationPermission.denied,
+        requestNotificationPermission: () async => NotificationPermission.denied,
+        isRunningService: () async => false,
+        startService: () async => throw StateError('Manifest service missing'),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      expect(ok, isFalse);
+      expect(SessionManager.instance.lastForegroundServiceError, contains('Manifest service missing'));
+      expect(warnings, hasLength(1));
     });
   });
 }
