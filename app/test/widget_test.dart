@@ -14,6 +14,7 @@ import 'package:omi_pixel/models/segment.dart';
 import 'package:omi_pixel/models/session.dart';
 import 'package:omi_pixel/services/api_client.dart';
 import 'package:omi_pixel/services/audio_decoder.dart';
+import 'package:omi_pixel/services/gemini_live_service.dart';
 import 'package:omi_pixel/services/recording_file_store.dart';
 import 'package:omi_pixel/services/session_manager.dart';
 import 'package:omi_pixel/services/settings_service.dart';
@@ -99,6 +100,21 @@ void main() {
       // Unknown model falls back safely to default
       SettingsService.instance.summaryModel = 'unknown-model';
       expect(SettingsService.instance.summaryModel, 'gemini-4-hydrogen');
+    });
+
+    test('GeminiLiveService.buildLiveProxyUri never embeds access_token in query string', () {
+      final uri = GeminiLiveService.buildLiveProxyUri(
+        'https://omi-pixel.example.run.app/',
+        language: 'en',
+        mode: 'smart',
+        sessionId: 'sess_abc',
+      );
+      expect(uri.scheme, 'wss');
+      expect(uri.path, '/api/live');
+      expect(uri.queryParameters['lang'], 'en');
+      expect(uri.queryParameters['mode'], 'smart');
+      expect(uri.queryParameters['session'], 'sess_abc');
+      expect(uri.queryParameters.containsKey('access_token'), isFalse);
     });
   });
 

@@ -114,6 +114,18 @@ func (a *Authenticator) IsAuthorized(ctx context.Context, email string) (bool, e
 	return isAuthz, nil
 }
 
+// extractBearerToken parses the Bearer JWT strictly from the Authorization HTTP header.
+// Query-string tokens (?access_token=...) are intentionally rejected so JWTs are
+// never recorded in Cloud Run / reverse-proxy HTTP request logs.
+func extractBearerToken(r *http.Request) string {
+	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+	token, ok := strings.CutPrefix(authHeader, "Bearer ")
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(token)
+}
+
 // Middleware enforces Firebase Authentication on HTTP handlers.
 func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -124,18 +136,11 @@ func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// 1. Extract token from Header or Query Param (for WebSocket handshakes)
-		token := ""
-		authHeader := r.Header.Get("Authorization")
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			token = strings.TrimPrefix(authHeader, "Bearer ")
-		} else if qToken := r.URL.Query().Get("access_token"); qToken != "" {
-			token = qToken
-		}
-
+		// 1. Extract Bearer token strictly from the Authorization header
+		token := extractBearerToken(r)
 		if token == "" {
 			respondJSON(w, http.StatusUnauthorized, map[string]string{
-				"error": "Unauthorized: missing Bearer token in Authorization header or access_token query param",
+				"error": "Unauthorized: missing Bearer token in Authorization header",
 			})
 			return
 		}

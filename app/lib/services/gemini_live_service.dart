@@ -37,6 +37,43 @@ class GeminiLiveService {
 
   int _sentChunksCount = 0;
 
+  /// Builds the Cloud Run Live WebSocket proxy URI without embedding auth tokens in the query string.
+  @visibleForTesting
+  static Uri buildLiveProxyUri(
+    String cloudRunUrl, {
+    String language = 'en',
+    String mode = 'verbatim',
+    String? sessionId,
+  }) {
+    var baseUrl = cloudRunUrl.trim();
+    while (baseUrl.endsWith('/')) {
+      baseUrl = baseUrl.substring(0, baseUrl.length - 1);
+    }
+
+    String wsBase;
+    if (baseUrl.startsWith('https://')) {
+      wsBase = 'wss://${baseUrl.substring(8)}/api/live';
+    } else if (baseUrl.startsWith('http://')) {
+      wsBase = 'ws://${baseUrl.substring(7)}/api/live';
+    } else {
+      wsBase = 'wss://$baseUrl/api/live';
+    }
+
+    final queryParams = <String, String>{};
+    if (language.isNotEmpty) {
+      queryParams['lang'] = language;
+    }
+    if (mode.isNotEmpty) {
+      queryParams['mode'] = mode;
+    }
+    if (sessionId != null && sessionId.isNotEmpty) {
+      queryParams['session'] = sessionId;
+    }
+
+    final baseUri = Uri.parse(wsBase);
+    return queryParams.isEmpty ? baseUri : baseUri.replace(queryParameters: queryParams);
+  }
+
   Future<bool> connect({
     required String cloudRunUrl,
     String language = 'en',
@@ -49,45 +86,26 @@ class GeminiLiveService {
     }
     await disconnect();
 
-    var baseUrl = cloudRunUrl.trim();
-    while (baseUrl.endsWith('/')) {
-      baseUrl = baseUrl.substring(0, baseUrl.length - 1);
-    }
+    final wsUri = buildLiveProxyUri(
+      cloudRunUrl,
+      language: language,
+      mode: mode,
+      sessionId: sessionId,
+    );
 
-    // Convert http(s) URL to ws(s)
-    String wsUrl;
-    if (baseUrl.startsWith('https://')) {
-      wsUrl = 'wss://${baseUrl.substring(8)}/api/live';
-    } else if (baseUrl.startsWith('http://')) {
-      wsUrl = 'ws://${baseUrl.substring(7)}/api/live';
-    } else {
-      wsUrl = 'wss://$baseUrl/api/live';
-    }
-
-    final queryParams = <String>[];
-    if (language.isNotEmpty) {
-      queryParams.add('lang=$language');
-    }
-    if (mode.isNotEmpty) {
-      queryParams.add('mode=$mode');
-    }
-    if (sessionId != null && sessionId.isNotEmpty) {
-      queryParams.add('session=$sessionId');
-    }
+    final headers = <String, dynamic>{};
     final token = await AuthService.instance.getIdToken();
     if (token != null && token.isNotEmpty) {
-      queryParams.add('access_token=$token');
-    }
-    if (queryParams.isNotEmpty) {
-      wsUrl += '?${queryParams.join('&')}';
+      headers['Authorization'] = 'Bearer $token';
     }
 
     try {
       _sentChunksCount = 0;
-      debugPrint('[GeminiLive] Connecting to Cloud Run Live Proxy ($wsUrl)...');
+      debugPrint('[GeminiLive] Connecting to Cloud Run Live Proxy ($wsUri)...');
 
       _channel = IOWebSocketChannel.connect(
-        Uri.parse(wsUrl),
+        wsUri,
+        headers: headers.isEmpty ? null : headers,
         pingInterval: const Duration(seconds: 20),
         connectTimeout: const Duration(seconds: 12),
       );

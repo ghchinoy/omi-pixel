@@ -342,3 +342,16 @@ func TestResolveSummaryModel(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractBearerToken_RejectsQueryParam(t *testing.T) {
+	reqWithHeader := httptest.NewRequest(http.MethodGet, "/api/live?session=sess_1", nil)
+	reqWithHeader.Header.Set("Authorization", "Bearer jwt-header-token")
+	if got := extractBearerToken(reqWithHeader); got != "jwt-header-token" {
+		t.Errorf("extractBearerToken(Authorization header) = %q, want %q", got, "jwt-header-token")
+	}
+
+	reqWithQuery := httptest.NewRequest(http.MethodGet, "/api/live?session=sess_1&access_token=leaked-jwt", nil)
+	if got := extractBearerToken(reqWithQuery); got != "" {
+		t.Errorf("extractBearerToken(query access_token) = %q, want empty string", got)
+	}
+}
