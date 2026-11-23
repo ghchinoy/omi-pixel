@@ -14,7 +14,7 @@ import (
 func TestServerHealthAndSessions(t *testing.T) {
 	ctx := t.Context()
 	store := NewMemoryStore()
-	gemini := NewGeminiClient(nil, "test-proj", "global", "gemini-3.5-transcribe", "gemini-3.5-flash-lite", "gemini-3.8-flash")
+	gemini := NewGeminiClient(nil, "test-proj", "global", "gemini-3.5-transcribe", "gemini-3.5-flash-lite", "gemini-4-hydrogen")
 	liveProxy := NewLiveProxy(nil, "test-proj", "global", "gemini-3.5-transcribe-live")
 	auth, err := NewAuthenticator(ctx, "test-proj", store, true)
 	if err != nil {
@@ -318,4 +318,27 @@ func TestUploadAudio_AsyncAccepted(t *testing.T) {
 
 	// Ensure background goroutine exits cleanly before test ends
 	server.WaitForBackgroundJobs()
+}
+
+func TestResolveSummaryModel(t *testing.T) {
+	tests := []struct {
+		name      string
+		requested string
+		fallback  string
+		want      string
+	}{
+		{name: "default_hydrogen", requested: "gemini-4-hydrogen", fallback: "gemini-3.8-flash", want: "gemini-4-hydrogen"},
+		{name: "alternate_flash", requested: "gemini-3.8-flash", fallback: "gemini-4-hydrogen", want: "gemini-3.8-flash"},
+		{name: "empty_uses_fallback", requested: "", fallback: "gemini-4-hydrogen", want: "gemini-4-hydrogen"},
+		{name: "disallowed_uses_fallback", requested: "gemini-untrusted-model", fallback: "gemini-4-hydrogen", want: "gemini-4-hydrogen"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ResolveSummaryModel(tc.requested, tc.fallback)
+			if got != tc.want {
+				t.Errorf("ResolveSummaryModel(%q, %q) = %q, want %q", tc.requested, tc.fallback, got, tc.want)
+			}
+		})
+	}
 }

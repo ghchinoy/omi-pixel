@@ -7,9 +7,16 @@ class SettingsService {
   static const String _keyCloudRunUrl = 'cloud_run_url';
   static const String _keyLiveModel = 'live_model';
   static const String _keyBatchModel = 'batch_model';
+  static const String _keySummaryModel = 'summary_model';
   static const String _keyLanguage = 'preferred_language';
   static const String _keyGenerateSummary = 'generate_summary';
   static const String _keyLiveTranscriptionMode = 'live_transcription_mode';
+
+  static const String defaultSummaryModel = 'gemini-4-hydrogen';
+  static const List<String> supportedSummaryModels = [
+    'gemini-4-hydrogen',
+    'gemini-3.8-flash',
+  ];
 
   SharedPreferences? _prefs;
 
@@ -31,6 +38,22 @@ class SettingsService {
 
   String get batchModel => _prefs?.getString(_keyBatchModel) ?? 'gemini-3.5-transcribe';
   set batchModel(String value) => _prefs?.setString(_keyBatchModel, value.trim());
+
+  String get summaryModel {
+    final stored = _prefs?.getString(_keySummaryModel);
+    if (stored != null && supportedSummaryModels.contains(stored)) {
+      return stored;
+    }
+    return defaultSummaryModel;
+  }
+
+  set summaryModel(String value) {
+    final clean = value.trim();
+    _prefs?.setString(
+      _keySummaryModel,
+      supportedSummaryModels.contains(clean) ? clean : defaultSummaryModel,
+    );
+  }
 
   String get preferredLanguage => _prefs?.getString(_keyLanguage) ?? 'en';
   set preferredLanguage(String value) => _prefs?.setString(_keyLanguage, value.trim());

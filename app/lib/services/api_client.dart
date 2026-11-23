@@ -94,6 +94,7 @@ class ApiClient {
     File? wavFile,
     Uint8List? wavBytes,
     bool? summary,
+    String? summaryModel,
     String? baseUrlOverride,
     Future<String?> Function({bool forceRefresh})? tokenProvider,
     Future<http.Response> Function(http.MultipartRequest req)? sendRequest,
@@ -107,7 +108,10 @@ class ApiClient {
     }
 
     final shouldSummarize = summary ?? SettingsService.instance.generateSummary;
-    final url = Uri.parse('$baseUrl/api/sessions/$sessionId/audio?summary=$shouldSummarize');
+    final selectedSummaryModel = summaryModel ?? SettingsService.instance.summaryModel;
+    final url = Uri.parse(
+      '$baseUrl/api/sessions/$sessionId/audio?summary=$shouldSummarize&summary_model=${Uri.encodeQueryComponent(selectedSummaryModel)}',
+    );
     final getToken = tokenProvider ?? ({bool forceRefresh = false}) => AuthService.instance.getIdToken(forceRefresh: forceRefresh);
     final doSend = sendRequest ??
         (http.MultipartRequest req) async {
@@ -236,13 +240,20 @@ class ApiClient {
   }
 
   /// Requests backend reprocessing of an already-stored session WAV in GCS.
-  Future<AudioUploadResult> reprocessSession(String sessionId, {bool? summary}) async {
+  Future<AudioUploadResult> reprocessSession(
+    String sessionId, {
+    bool? summary,
+    String? summaryModel,
+  }) async {
     if (!isConfigured) {
       return const AudioUploadResult(error: 'Cloud Run URL is not configured.');
     }
     final shouldSummarize = summary ?? SettingsService.instance.generateSummary;
+    final selectedSummaryModel = summaryModel ?? SettingsService.instance.summaryModel;
     try {
-      final url = Uri.parse('$_baseUrl/api/sessions/$sessionId/reprocess?summary=$shouldSummarize');
+      final url = Uri.parse(
+        '$_baseUrl/api/sessions/$sessionId/reprocess?summary=$shouldSummarize&summary_model=${Uri.encodeQueryComponent(selectedSummaryModel)}',
+      );
       var headers = await _authHeaders();
       var resp = await http.post(url, headers: headers).timeout(const Duration(minutes: 3));
       if (resp.statusCode == 401) {

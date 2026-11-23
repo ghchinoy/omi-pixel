@@ -3,10 +3,10 @@
 [![Version](https://img.shields.io/badge/version-0.3.3-38bdf8?style=flat-square)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Google%20Pixel%20%7C%20Android-22c55e?style=flat-square)](#supported-hardware--audio-codecs)
 [![Backend](https://img.shields.io/badge/backend-Go%201.26%20%7C%20Cloud%20Run-0284c7?style=flat-square)](#architecture)
-[![AI](https://img.shields.io/badge/Vertex%20AI-Gemini%203.5%20Transcribe%20%2B%203.8%20Flash-6366f1?style=flat-square)](#why-omi-pixel)
+[![AI](https://img.shields.io/badge/Vertex%20AI-Gemini%203.5%20Transcribe%20%2B%204%20Hydrogen-6366f1?style=flat-square)](#why-omi-pixel)
 [![License: MIT](https://img.shields.io/badge/license-MIT-94a3b8?style=flat-square)](LICENSE)
 
-A standalone, self-hosted **Flutter companion app for Google Pixel** and **Go Cloud Run backend** for **Omi wearable hardware (DevKit & CV1)**—combining sub-second live speech streaming via **Gemini 3.5 Transcribe Live** with post-session multi-speaker diarization (**Gemini 3.5 Transcribe**), AI synthesis (**Gemini 3.8 Flash**), and synchronized 16kHz WAV playback.
+A standalone, self-hosted **Flutter companion app for Google Pixel** and **Go Cloud Run backend** for **Omi wearable hardware (DevKit & CV1)**—combining sub-second live speech streaming via **Gemini 3.5 Transcribe Live** with post-session multi-speaker diarization (**Gemini 3.5 Transcribe**), AI synthesis (**Gemini 4 Hydrogen**), and synchronized 16kHz WAV playback.
 
 ---
 
@@ -15,7 +15,7 @@ A standalone, self-hosted **Flutter companion app for Google Pixel** and **Go Cl
 - **🔒 100% Private, Self-Hosted Cloud**: Your raw audio and transcripts live exclusively in *your* Google Cloud project (Firestore + Cloud Storage) behind your personal Google account allowlist—zero third-party SaaS telemetry.
 - **⚡ Two-Pass Gemini 3.5 Pipeline**:
   - **Pass 1 (Real-Time UX)**: Streams 16kHz mono PCM over WebSocket to `gemini-3.5-transcribe-live` for instant verbatim or smart transcription while you speak.
-  - **Pass 2 (Diarized Truth & Synthesis)**: Uploads the full 16kHz session WAV to Cloud Storage, separates speakers (`Speaker 1`, `Speaker 2`, …) with word-level timestamps via `gemini-3.5-transcribe`, and synthesizes titles (`gemini-3.5-flash-lite`) and takeaways (`gemini-3.8-flash`).
+  - **Pass 2 (Diarized Truth & Synthesis)**: Uploads the full 16kHz session WAV to Cloud Storage, separates speakers (`Speaker 1`, `Speaker 2`, …) with word-level timestamps via `gemini-3.5-transcribe`, and synthesizes titles (`gemini-3.5-flash-lite`) and takeaways (`gemini-4-hydrogen` default, or `gemini-3.8-flash` selectable in Settings).
 - **🔋 Featherweight Pixel Companion**: Native `libopus` decoding (`Codec 20` & `Codec 21`), BLE auto-reconnect, and zero bloated cloud storage SDKs on the phone.
 - **⏯️ Tap-to-Seek Audio Review (Mobile & Web)**: Tap any speaker turn card on your phone or in the responsive Web Review Dashboard to seek the 16kHz WAV player directly to that timestamp.
 
@@ -108,7 +108,7 @@ make run-app
 1. **Configure Service URL**: Open **Settings** (⚙️) in the app. Sign in with your authorized Google account, enter your Cloud Run URL (or `http://localhost:8080` via `make adb-reverse`), choose **Verbatim** or **Smart** live transcription mode, and tap **Test Connection**.
 2. **Connect Wearable**: Turn on your Omi device and tap **Scan for Omi Device**. Once paired, Omi-Pixel remembers your wearable ID and automatically reconnects on future launches.
 3. **Record & Stream**: Tap **Start Conversation**. Speech is decoded from BLE Opus packets to 16kHz PCM and streamed to Gemini 3.5 Transcribe Live for real-time display.
-4. **Diarize & Review**: Tap **Finish Recording & Diarize**. The full session WAV is uploaded to Cloud Storage, diarized by speaker on Vertex AI, summarized by Gemini 3.8 Flash, and saved to Firestore.
+4. **Diarize & Review**: Tap **Finish Recording & Diarize**. The full session WAV is uploaded to Cloud Storage, diarized by speaker on Vertex AI, summarized by Gemini 4 Hydrogen (default), and saved to Firestore.
 5. **Listen & Seek**: Tap any speaker turn card on your phone or in the Web Review Dashboard to play the recording from that exact timestamp.
 
 ---

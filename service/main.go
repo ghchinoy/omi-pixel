@@ -39,7 +39,7 @@ func main() {
 	}
 	summaryModel := os.Getenv("SUMMARY_MODEL")
 	if summaryModel == "" {
-		summaryModel = "gemini-3.8-flash"
+		summaryModel = "gemini-4-hydrogen"
 	}
 
 	gcsBucket := os.Getenv("GCS_BUCKET")

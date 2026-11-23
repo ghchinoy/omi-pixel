@@ -251,11 +251,12 @@ func (s *Server) handleUploadAudio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. Check query param for summary generation preference (default: true)
+	// 3. Check query params for summary preference and optional allowlisted summary model
 	generateSummary := true
 	if summaryParam := r.URL.Query().Get("summary"); summaryParam != "" {
 		generateSummary = (summaryParam == "true" || summaryParam == "1")
 	}
+	summaryModelOverride := ResolveSummaryModel(r.URL.Query().Get("summary_model"), "")
 
 	// 4. Optionally upload to GCS (or local in-memory audio store)
 	var gcsURI string
@@ -285,7 +286,7 @@ func (s *Server) handleUploadAudio(w http.ResponseWriter, r *http.Request) {
 			defer s.bgWg.Done()
 			bgCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Minute)
 			defer cancel()
-			if _, err := s.runDiarizationAndPersist(bgCtx, &sessionCopy, audioCopy, gcsURI, generateSummary); err != nil {
+			if _, err := s.runDiarizationAndPersist(bgCtx, &sessionCopy, audioCopy, gcsURI, generateSummary, summaryModelOverride); err != nil {
 				log.Printf("[handleUploadAudio] Async diarization failed for session %s: %v", sessionCopy.ID, err)
 			}
 		}()
@@ -298,7 +299,7 @@ func (s *Server) handleUploadAudio(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 5. Perform synchronous Gemini 3.5 Transcribe structured diarization & AI title/summary
-	detail, err := s.runDiarizationAndPersist(ctx, session, audioBytes, gcsURI, generateSummary)
+	detail, err := s.runDiarizationAndPersist(ctx, session, audioBytes, gcsURI, generateSummary, summaryModelOverride)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("diarization failed: %v", err), http.StatusInternalServerError)
 		return
@@ -313,6 +314,7 @@ func (s *Server) runDiarizationAndPersist(
 	audioBytes []byte,
 	gcsURI string,
 	generateSummary bool,
+	summaryModelOverride string,
 ) (*SessionDetail, error) {
 	if s.gemini == nil {
 		session.Status = StatusFailed
@@ -320,8 +322,8 @@ func (s *Server) runDiarizationAndPersist(
 		return nil, fmt.Errorf("gemini client is not configured")
 	}
 
-	log.Printf("Running Gemini 3.5 diarization for session %s (gcs=%s, bytes=%d, summary=%v)...", session.ID, gcsURI, len(audioBytes), generateSummary)
-	diarized, err := s.gemini.DiarizeAudio(ctx, audioBytes, gcsURI, session.Language, generateSummary)
+	log.Printf("Running Gemini 3.5 diarization for session %s (gcs=%s, bytes=%d, summary=%v, summaryModel=%q)...", session.ID, gcsURI, len(audioBytes), generateSummary, summaryModelOverride)
+	diarized, err := s.gemini.DiarizeAudio(ctx, audioBytes, gcsURI, session.Language, generateSummary, summaryModelOverride)
 	if err != nil {
 		log.Printf("Gemini diarization failed for session %s: %v", session.ID, err)
 		session.Status = StatusFailed
@@ -387,6 +389,7 @@ func (s *Server) handleReprocessSession(w http.ResponseWriter, r *http.Request) 
 	if summaryParam := r.URL.Query().Get("summary"); summaryParam != "" {
 		generateSummary = (summaryParam == "true" || summaryParam == "1")
 	}
+	summaryModelOverride := ResolveSummaryModel(r.URL.Query().Get("summary_model"), "")
 
 	var gcsURI string
 	if strings.HasPrefix(session.AudioURL, "gs://") {
@@ -404,7 +407,7 @@ func (s *Server) handleReprocessSession(w http.ResponseWriter, r *http.Request) 
 			defer s.bgWg.Done()
 			bgCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Minute)
 			defer cancel()
-			if _, err := s.runDiarizationAndPersist(bgCtx, &sessionCopy, audioBytes, gcsURI, generateSummary); err != nil {
+			if _, err := s.runDiarizationAndPersist(bgCtx, &sessionCopy, audioBytes, gcsURI, generateSummary, summaryModelOverride); err != nil {
 				log.Printf("[handleReprocessSession] Async reprocess failed for %s: %v", sessionCopy.ID, err)
 			}
 		}()
@@ -416,7 +419,7 @@ func (s *Server) handleReprocessSession(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	detail, err := s.runDiarizationAndPersist(ctx, session, audioBytes, gcsURI, generateSummary)
+	detail, err := s.runDiarizationAndPersist(ctx, session, audioBytes, gcsURI, generateSummary, summaryModelOverride)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("reprocess diarization failed: %v", err), http.StatusInternalServerError)
 		return

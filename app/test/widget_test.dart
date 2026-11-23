@@ -85,13 +85,20 @@ void main() {
       );
     });
 
-    test('SettingsService liveTranscriptionMode defaults and saves', () async {
+    test('SettingsService liveTranscriptionMode and summaryModel default and save', () async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.instance.init();
 
       expect(SettingsService.instance.liveTranscriptionMode, 'verbatim');
       SettingsService.instance.liveTranscriptionMode = 'smart';
       expect(SettingsService.instance.liveTranscriptionMode, 'smart');
+
+      expect(SettingsService.instance.summaryModel, 'gemini-4-hydrogen');
+      SettingsService.instance.summaryModel = 'gemini-3.8-flash';
+      expect(SettingsService.instance.summaryModel, 'gemini-3.8-flash');
+      // Unknown model falls back safely to default
+      SettingsService.instance.summaryModel = 'unknown-model';
+      expect(SettingsService.instance.summaryModel, 'gemini-4-hydrogen');
     });
   });
 
@@ -476,6 +483,7 @@ void main() {
         },
         sendRequest: (req) async {
           attemptCount++;
+          expect(req.url.queryParameters['summary_model'], 'gemini-4-hydrogen');
           if (attemptCount == 1) {
             expect(req.headers['Authorization'], 'Bearer expired-jwt-token');
             return http.Response('{"error":"token expired"}', 401);

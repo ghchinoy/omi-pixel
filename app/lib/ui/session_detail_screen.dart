@@ -549,7 +549,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                       Icon(Icons.auto_awesome, size: 18, color: theme.colorScheme.primary),
                       const SizedBox(width: 8),
                       Text(
-                        'Gemini 3.8 Flash Summary',
+                        'AI Summary',
                         style: theme.textTheme.titleSmall?.copyWith(
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.bold,

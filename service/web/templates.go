@@ -555,7 +555,7 @@ const spaTemplate = `
 
         if (s.summary) {
           html += '<div class="summary-box">' +
-            '<strong>✨ Gemini 3.8 Flash Summary</strong>' +
+            '<strong>✨ AI Summary</strong>' +
             '<p style="margin-top:0.5rem; line-height:1.5;">' + escapeHtml(s.summary) + '</p>' +
             '</div>';
         }

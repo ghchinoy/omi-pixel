@@ -21,6 +21,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _cloudRunUrlController = TextEditingController();
   String _selectedLanguage = 'en';
   String _selectedLiveMode = 'verbatim';
+  String _selectedSummaryModel = SettingsService.defaultSummaryModel;
   bool _generateSummary = true;
   bool _testingConnection = false;
   String? _connectionStatusMessage;
@@ -35,6 +36,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _cloudRunUrlController.text = s.cloudRunUrl;
     _selectedLanguage = s.preferredLanguage;
     _selectedLiveMode = s.liveTranscriptionMode;
+    _selectedSummaryModel = s.summaryModel;
     _generateSummary = s.generateSummary;
     if (s.cloudRunUrl.isNotEmpty) {
       _fetchBackendVersion(s.cloudRunUrl);
@@ -89,6 +91,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     s.cloudRunUrl = _cloudRunUrlController.text;
     s.preferredLanguage = _selectedLanguage;
     s.liveTranscriptionMode = _selectedLiveMode;
+    s.summaryModel = _selectedSummaryModel;
     s.generateSummary = _generateSummary;
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -286,16 +289,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text('gemini-3.5-flash-lite (Global)'),
             dense: true,
           ),
-          const ListTile(
-            leading: Icon(Icons.summarize),
-            title: Text('Summary Generation Model'),
-            subtitle: Text('gemini-3.8-flash (Global)'),
-            dense: true,
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            isExpanded: true,
+            initialValue: _selectedSummaryModel,
+            decoration: const InputDecoration(
+              labelText: 'Summary Generation Model',
+              helperText: 'Used on Vertex AI (Global) when AI Summary is enabled',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.summarize),
+            ),
+            items: const [
+              DropdownMenuItem(
+                value: 'gemini-4-hydrogen',
+                child: Text('Gemini 4 Hydrogen (Default)'),
+              ),
+              DropdownMenuItem(
+                value: 'gemini-3.8-flash',
+                child: Text('Gemini 3.8 Flash (Faster)'),
+              ),
+            ],
+            onChanged: (val) {
+              if (val != null) setState(() => _selectedSummaryModel = val);
+            },
           ),
           const SizedBox(height: 8),
           SwitchListTile(
             title: const Text('Generate AI Summary'),
-            subtitle: const Text('Uses Gemini 3.8 Flash after batch diarization completes'),
+            subtitle: Text('Uses $_selectedSummaryModel after batch diarization completes'),
             value: _generateSummary,
             onChanged: (val) => setState(() => _generateSummary = val),
             secondary: const Icon(Icons.auto_awesome),

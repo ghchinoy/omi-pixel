@@ -13,6 +13,25 @@ import (
 	"time"
 )
 
+const (
+	// DefaultSummaryModel is the default Vertex AI model used for post-diarization summaries.
+	DefaultSummaryModel = "gemini-4-hydrogen"
+)
+
+var allowedSummaryModels = map[string]bool{
+	"gemini-4-hydrogen": true,
+	"gemini-3.8-flash":  true,
+}
+
+// ResolveSummaryModel returns requested if it is on the allowlist, otherwise fallback.
+func ResolveSummaryModel(requested, fallback string) string {
+	clean := strings.TrimSpace(requested)
+	if allowedSummaryModels[clean] {
+		return clean
+	}
+	return fallback
+}
+
 type GeminiClient struct {
 	vertexAuth      *VertexAuth
 	projectID       string
@@ -34,7 +53,7 @@ func NewGeminiClient(auth *VertexAuth, projectID, location, transcribeModel, tit
 		titleModel = "gemini-3.5-flash-lite"
 	}
 	if summaryModel == "" {
-		summaryModel = "gemini-3.8-flash"
+		summaryModel = DefaultSummaryModel
 	}
 	return &GeminiClient{
 		vertexAuth:      auth,
@@ -119,8 +138,8 @@ type vertexGenerateResponse struct {
 
 // DiarizeAudio performs Vertex AI Gemini 3.5 Transcribe audio transcription & speaker diarization,
 // accepting either a gcsURI (gs://bucket/path) or raw WAV bytes (inlineData fallback),
-// followed by AI title (gemini-3.5-flash-lite) and optional AI summary (gemini-3.8-flash).
-func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, gcsURI string, language string, generateSummary bool) (*DiarizedResult, error) {
+// followed by AI title (gemini-3.5-flash-lite) and optional AI summary (default: gemini-4-hydrogen).
+func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, gcsURI string, language string, generateSummary bool, summaryModelOverride string) (*DiarizedResult, error) {
 	if g.vertexAuth == nil {
 		return nil, fmt.Errorf("vertex auth credentials not initialized")
 	}
@@ -276,13 +295,14 @@ func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, g
 		title = deriveTitleFromTranscript(fullTranscript.String())
 	}
 
-	// 2. Generate Summary with gemini-3.8-flash if requested
+	// 2. Generate Summary with configured summary model (default: gemini-4-hydrogen) if requested
 	summary := ""
-	if generateSummary && transcriptBody != "" && g.summaryModel != "" {
-		summaryPrompt := fmt.Sprintf("Provide a clear, concise 2 to 4 sentence summary of the key discussion points and takeaways from this conversation transcript.\n\nTranscript:\n%s", transcriptBody)
-		s, err := g.generateText(ctx, g.summaryModel, summaryPrompt, "LOW")
+	effectiveSummaryModel := ResolveSummaryModel(summaryModelOverride, g.summaryModel)
+	if generateSummary && transcriptBody != "" && effectiveSummaryModel != "" {
+		summaryPrompt := fmt.Sprintf("Provide a clear, concise 2 to 4 sentence summary of the key discussion points and takeaways from this conversation transcript. Plain text only, no markdown formatting or backticks.\n\nTranscript:\n%s", transcriptBody)
+		s, err := g.generateText(ctx, effectiveSummaryModel, summaryPrompt, "LOW")
 		if err != nil || s == "" {
-			log.Printf("[GeminiClient] Summary generation with %s failed: %v", g.summaryModel, err)
+			log.Printf("[GeminiClient] Summary generation with %s failed: %v", effectiveSummaryModel, err)
 		}
 		if err == nil && s != "" {
 			summary = s
