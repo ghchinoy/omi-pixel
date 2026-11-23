@@ -236,6 +236,47 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     }
   }
 
+  Future<void> _confirmDeleteSession() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Conversation?'),
+        content: const Text('This permanently deletes the transcript and stored audio recording.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final deleted = await SessionManager.instance.deleteSession(_session.id);
+    if (!mounted) return;
+    if (deleted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Conversation deleted')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Failed to delete conversation from server'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
+  }
+
   void _seekTo(double startSeconds) {
     if (_audioAvailable) {
       _audioPlayer.seek(Duration(milliseconds: (startSeconds * 1000).toInt()));
@@ -257,6 +298,11 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             icon: const Icon(Icons.copy_all),
             tooltip: 'Copy Transcript',
             onPressed: () => _copyTranscript(context),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Delete Conversation',
+            onPressed: _confirmDeleteSession,
           ),
         ],
       ),

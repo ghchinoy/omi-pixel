@@ -95,6 +95,7 @@ func main() {
 
 	geminiClient := NewGeminiClient(vertexAuth, projectID, location, geminiModel, titleModel, summaryModel)
 	liveProxy := NewLiveProxy(vertexAuth, projectID, location, liveModel)
+	liveProxy.SetPersistence(store, audioStore)
 
 	log.Printf("Gemini Transcribe configured: Batch=%s, Live=%s, Title=%s, Summary=%s (Vertex AI %s)",
 		geminiModel, liveModel, titleModel, summaryModel, location)
@@ -156,6 +157,7 @@ func main() {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 	server.WaitForBackgroundJobs()
+	liveProxy.WaitForFallbackJobs()
 
 	log.Println("Server exited gracefully.")
 }

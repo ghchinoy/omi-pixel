@@ -1,23 +1,36 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
 )
 
+const (
+	maxLiveFallbackPCMBytes = 32 << 20 // 32 MB cap (~17 min of 16kHz 16-bit mono PCM)
+	defaultOrphanGrace      = 15 * time.Second
+)
+
 // LiveProxy handles bridging mobile clients with the Vertex AI Gemini 3.5 Transcribe Live WebSocket.
 type LiveProxy struct {
-	vertexAuth *VertexAuth
-	projectID  string
-	location   string
-	liveModel  string
+	vertexAuth        *VertexAuth
+	projectID         string
+	location          string
+	liveModel         string
+	store             Store
+	audioStore        AudioStore
+	orphanGracePeriod time.Duration
+	bgWg              sync.WaitGroup
 }
 
 func NewLiveProxy(auth *VertexAuth, projectID, location, liveModel string) *LiveProxy {
@@ -28,11 +41,24 @@ func NewLiveProxy(auth *VertexAuth, projectID, location, liveModel string) *Live
 		liveModel = "gemini-3.5-transcribe-live"
 	}
 	return &LiveProxy{
-		vertexAuth: auth,
-		projectID:  projectID,
-		location:   location,
-		liveModel:  liveModel,
+		vertexAuth:        auth,
+		projectID:         projectID,
+		location:          location,
+		liveModel:         liveModel,
+		orphanGracePeriod: defaultOrphanGrace,
 	}
+}
+
+// SetPersistence attaches Store and AudioStore so LiveProxy can recover abandoned sessions
+// when a mobile client disconnects without uploading audio.
+func (lp *LiveProxy) SetPersistence(store Store, audioStore AudioStore) {
+	lp.store = store
+	lp.audioStore = audioStore
+}
+
+// WaitForFallbackJobs waits for any pending orphan-session recovery goroutines to finish.
+func (lp *LiveProxy) WaitForFallbackJobs() {
+	lp.bgWg.Wait()
 }
 
 // ClientAudioFrame is the simplified audio payload from the mobile app.
@@ -90,6 +116,10 @@ func (lp *LiveProxy) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	modeParam := r.URL.Query().Get("mode")
 	langParam := r.URL.Query().Get("lang")
+	clientSessionID := r.URL.Query().Get("session")
+	if !isValidSessionID(clientSessionID) {
+		clientSessionID = ""
+	}
 
 	// 1. Upgrade client connection
 	clientConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
@@ -266,7 +296,8 @@ func (lp *LiveProxy) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// 7. Downstream relay: Client -> Vertex
+	// 7. Downstream relay: Client -> Vertex (with bounded PCM fallback buffer)
+	var fallbackPCM bytes.Buffer
 	for {
 		_, clientData, err := clientConn.Read(ctx)
 		if err != nil {
@@ -276,6 +307,16 @@ func (lp *LiveProxy) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		// Try parsing simplified client frame first: {"audio": "<b64>"}
 		var frame ClientAudioFrame
 		if err := json.Unmarshal(clientData, &frame); err == nil && frame.Audio != "" {
+			if clientSessionID != "" && fallbackPCM.Len() < maxLiveFallbackPCMBytes {
+				if decoded, decErr := base64.StdEncoding.DecodeString(frame.Audio); decErr == nil && len(decoded) > 0 {
+					remaining := maxLiveFallbackPCMBytes - fallbackPCM.Len()
+					if len(decoded) > remaining {
+						decoded = decoded[:remaining]
+					}
+					_, _ = fallbackPCM.Write(decoded)
+				}
+			}
+
 			mimeType := frame.MimeType
 			if mimeType == "" {
 				mimeType = "audio/pcm;rate=16000"
@@ -302,7 +343,89 @@ func (lp *LiveProxy) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	log.Printf("[LiveProxy] Live session ended.")
+	log.Printf("[LiveProxy] Live session ended (session=%q, fallbackPCMBytes=%d).", clientSessionID, fallbackPCM.Len())
+
+	// 8. Schedule orphan-session fallback check if the client drops without uploading audio
+	if clientSessionID != "" && lp.store != nil {
+		pcmCopy := append([]byte(nil), fallbackPCM.Bytes()...)
+		grace := lp.orphanGracePeriod
+		if grace <= 0 {
+			grace = defaultOrphanGrace
+		}
+		lp.bgWg.Add(1)
+		go func() {
+			defer lp.bgWg.Done()
+			timer := time.NewTimer(grace)
+			defer timer.Stop()
+			<-timer.C
+			bgCtx, bgCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer bgCancel()
+			lp.recoverOrphanedSession(bgCtx, clientSessionID, pcmCopy)
+		}()
+	}
+}
+
+func (lp *LiveProxy) recoverOrphanedSession(ctx context.Context, sessionID string, pcmBytes []byte) {
+	if lp.store == nil || sessionID == "" {
+		return
+	}
+	session, err := lp.store.GetSession(ctx, sessionID)
+	if err != nil {
+		return
+	}
+	// If the mobile client already uploaded audio or finalized the session, do nothing.
+	if session.Status != StatusRecording {
+		return
+	}
+
+	now := time.Now().UTC()
+	session.FinishedAt = &now
+	session.Status = StatusFailed
+
+	if len(pcmBytes) > 0 && lp.audioStore != nil {
+		wavBytes := buildPCM16WAV(pcmBytes, 16000, 1)
+		if uri, err := lp.audioStore.UploadWAV(ctx, sessionID, wavBytes); err != nil {
+			log.Printf("[LiveProxy] Failed uploading fallback WAV for orphaned session %s: %v", sessionID, err)
+			session.Summary = "Recording ended unexpectedly; fallback audio upload failed."
+		} else {
+			session.AudioURL = uri
+			session.HasAudio = true
+			session.DurationSeconds = float64(len(pcmBytes)) / float64(16000*2)
+			session.Summary = "Recording interrupted — audio recovered on server. Use Retry Diarization to process."
+			log.Printf("[LiveProxy] Recovered %d bytes of fallback audio for orphaned session %s -> %s", len(pcmBytes), sessionID, uri)
+		}
+	} else {
+		session.Summary = "Recording ended unexpectedly without audio upload."
+		log.Printf("[LiveProxy] Transitioned orphaned empty session %s from recording -> failed", sessionID)
+	}
+
+	if err := lp.store.SaveSession(ctx, session); err != nil {
+		log.Printf("[LiveProxy] Failed saving recovered orphaned session %s: %v", sessionID, err)
+	}
+}
+
+func buildPCM16WAV(pcm []byte, sampleRate, channels uint32) []byte {
+	const bitsPerSample = 16
+	dataSize := uint32(len(pcm))
+	byteRate := sampleRate * channels * (bitsPerSample / 8)
+	blockAlign := uint16(channels * (bitsPerSample / 8))
+
+	wav := make([]byte, 44+len(pcm))
+	copy(wav[0:4], "RIFF")
+	binary.LittleEndian.PutUint32(wav[4:8], 36+dataSize)
+	copy(wav[8:12], "WAVE")
+	copy(wav[12:16], "fmt ")
+	binary.LittleEndian.PutUint32(wav[16:20], 16)
+	binary.LittleEndian.PutUint16(wav[20:22], 1)
+	binary.LittleEndian.PutUint16(wav[22:24], uint16(channels))
+	binary.LittleEndian.PutUint32(wav[24:28], sampleRate)
+	binary.LittleEndian.PutUint32(wav[28:32], byteRate)
+	binary.LittleEndian.PutUint16(wav[32:34], blockAlign)
+	binary.LittleEndian.PutUint16(wav[34:36], bitsPerSample)
+	copy(wav[36:40], "data")
+	binary.LittleEndian.PutUint32(wav[40:44], dataSize)
+	copy(wav[44:], pcm)
+	return wav
 }
 
 func writeClientJSON(ctx context.Context, conn *websocket.Conn, v any) error {

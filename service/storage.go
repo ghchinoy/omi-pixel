@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -15,6 +16,7 @@ import (
 type AudioStore interface {
 	UploadWAV(ctx context.Context, sessionID string, wavBytes []byte) (string, error)
 	DownloadWAV(ctx context.Context, sessionID string) (io.ReadCloser, int64, error)
+	DeleteWAV(ctx context.Context, sessionID string) error
 	Close() error
 }
 
@@ -92,6 +94,18 @@ func (g *GCSStore) DownloadWAV(ctx context.Context, sessionID string) (io.ReadCl
 	return reader, attrs.Size, nil
 }
 
+func (g *GCSStore) DeleteWAV(ctx context.Context, sessionID string) error {
+	if g == nil || g.client == nil {
+		return nil
+	}
+	objectPath := fmt.Sprintf("sessions/%s/audio.wav", sessionID)
+	err := g.client.Bucket(g.bucket).Object(objectPath).Delete(ctx)
+	if err != nil && !errors.Is(err, storage.ErrObjectNotExist) {
+		return fmt.Errorf("failed deleting gcs object %s: %w", objectPath, err)
+	}
+	return nil
+}
+
 func (g *GCSStore) Close() error {
 	if g != nil && g.client != nil {
 		return g.client.Close()
@@ -137,6 +151,19 @@ func (n *NoopAudioStore) DownloadWAV(_ context.Context, sessionID string) (io.Re
 		}
 	}
 	return nil, 0, fmt.Errorf("audio not found in memory store")
+}
+
+func (n *NoopAudioStore) DeleteWAV(_ context.Context, sessionID string) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	delete(n.files, sessionID)
+	for i, id := range n.order {
+		if id == sessionID {
+			n.order = append(n.order[:i], n.order[i+1:]...)
+			break
+		}
+	}
+	return nil
 }
 
 func (n *NoopAudioStore) Close() error {

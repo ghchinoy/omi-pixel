@@ -71,6 +71,7 @@ func (s *Server) Routes() http.Handler {
 	apiMux.HandleFunc("POST /api/sessions", s.handleCreateSession)
 	apiMux.HandleFunc("GET /api/sessions", s.handleListSessions)
 	apiMux.HandleFunc("GET /api/sessions/{id}", s.handleGetSession)
+	apiMux.HandleFunc("DELETE /api/sessions/{id}", s.handleDeleteSession)
 	apiMux.HandleFunc("POST /api/sessions/{id}/audio", s.handleUploadAudio)
 	apiMux.HandleFunc("GET /api/sessions/{id}/audio", s.handleDownloadAudio)
 	apiMux.HandleFunc("POST /api/sessions/{id}/reprocess", s.handleReprocessSession)
@@ -191,6 +192,32 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, detail)
+}
+
+func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !isValidSessionID(id) {
+		http.Error(w, "missing or invalid session id", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	if s.audioStore != nil {
+		if err := s.audioStore.DeleteWAV(ctx, id); err != nil {
+			log.Printf("[handleDeleteSession] Warning: failed deleting WAV for session %s: %v", id, err)
+		}
+	}
+
+	if err := s.store.DeleteSession(ctx, id); err != nil {
+		log.Printf("[handleDeleteSession] Failed deleting session %s: %v", id, err)
+		http.Error(w, "failed to delete session", http.StatusInternalServerError)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]any{
+		"status": "deleted",
+		"id":     id,
+	})
 }
 
 func (s *Server) handleUploadAudio(w http.ResponseWriter, r *http.Request) {

@@ -274,4 +274,26 @@ class ApiClient {
       return AudioUploadResult(error: 'Reprocess error: $e');
     }
   }
+
+  /// Deletes a session, its segments, and its stored GCS audio on the backend.
+  Future<bool> deleteSession(String sessionId) async {
+    if (!isConfigured) return true;
+    try {
+      final url = Uri.parse('$_baseUrl/api/sessions/$sessionId');
+      var headers = await _authHeaders();
+      var resp = await http.delete(url, headers: headers).timeout(const Duration(seconds: 15));
+      if (resp.statusCode == 401) {
+        headers = await _authHeaders(null, true);
+        resp = await http.delete(url, headers: headers).timeout(const Duration(seconds: 15));
+      }
+      if (resp.statusCode == 200 || resp.statusCode == 404) {
+        return true;
+      }
+      debugPrint('[ApiClient] deleteSession($sessionId) failed: HTTP ${resp.statusCode}');
+      return false;
+    } catch (e) {
+      debugPrint('[ApiClient] deleteSession($sessionId) error: $e');
+      return false;
+    }
+  }
 }

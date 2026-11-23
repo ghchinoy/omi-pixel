@@ -59,6 +59,7 @@ type Store interface {
 	SaveSegments(ctx context.Context, sessionID string, segments []Segment) error
 	GetSegments(ctx context.Context, sessionID string) ([]Segment, error)
 	GetSessionDetail(ctx context.Context, id string) (*SessionDetail, error)
+	DeleteSession(ctx context.Context, id string) error
 	IsAuthorizedUser(ctx context.Context, email string) (bool, error)
 	Close() error
 }
@@ -160,6 +161,14 @@ func (m *MemoryStore) GetSessionDetail(ctx context.Context, id string) (*Session
 		Session:  *session,
 		Segments: segments,
 	}, nil
+}
+
+func (m *MemoryStore) DeleteSession(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.sessions, id)
+	delete(m.segments, id)
+	return nil
 }
 
 func (m *MemoryStore) IsAuthorizedUser(_ context.Context, email string) (bool, error) {
@@ -308,6 +317,41 @@ func (f *FirestoreStore) GetSessionDetail(ctx context.Context, id string) (*Sess
 		Session:  *session,
 		Segments: segments,
 	}, nil
+}
+
+func (f *FirestoreStore) DeleteSession(ctx context.Context, id string) error {
+	docRef := f.client.Collection("omi_sessions").Doc(id)
+	// Delete segments subcollection first via BulkWriter
+	iter := docRef.Collection("segments").DocumentRefs(ctx)
+	bw := f.client.BulkWriter(ctx)
+	var jobs []*firestore.BulkWriterJob
+	for {
+		segRef, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			bw.End()
+			return fmt.Errorf("error listing segments for delete: %w", err)
+		}
+		job, err := bw.Delete(segRef)
+		if err != nil {
+			bw.End()
+			return fmt.Errorf("failed to enqueue segment delete: %w", err)
+		}
+		jobs = append(jobs, job)
+	}
+	bw.End()
+	for _, job := range jobs {
+		if _, err := job.Results(); err != nil {
+			return fmt.Errorf("failed to delete segment doc: %w", err)
+		}
+	}
+
+	if _, err := docRef.Delete(ctx); err != nil {
+		return fmt.Errorf("failed to delete session %s: %w", id, err)
+	}
+	return nil
 }
 
 func (f *FirestoreStore) IsAuthorizedUser(ctx context.Context, email string) (bool, error) {

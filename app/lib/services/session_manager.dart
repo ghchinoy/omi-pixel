@@ -767,6 +767,20 @@ class SessionManager {
     _saveSessionLocally(session);
   }
 
+  /// Deletes a session from backend, local cache, and any queued local WAV file.
+  Future<bool> deleteSession(String sessionId) async {
+    final remoteOk = await ApiClient.instance.deleteSession(sessionId);
+    if (!remoteOk) return false;
+
+    _cachedSessions.removeWhere((s) => s.id == sessionId);
+    _sessionsController.add(_cachedSessions);
+    await _persistLocalSessions();
+
+    _pendingUploads = await _fileStore.markUploadComplete(sessionId);
+    _pendingUploadsController.add(_pendingUploads);
+    return true;
+  }
+
   void _saveSessionLocally(Session session) {
     int idx = _cachedSessions.indexWhere((s) => s.id == session.id);
     if (idx >= 0) {

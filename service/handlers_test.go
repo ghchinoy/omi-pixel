@@ -355,3 +355,68 @@ func TestExtractBearerToken_RejectsQueryParam(t *testing.T) {
 		t.Errorf("extractBearerToken(query access_token) = %q, want empty string", got)
 	}
 }
+
+func TestDeleteSessionAndOrphanFallbackRecovery(t *testing.T) {
+	ctx := t.Context()
+	store := NewMemoryStore()
+	audioStore := &NoopAudioStore{}
+	auth, err := NewAuthenticator(ctx, "test-proj", store, true)
+	if err != nil {
+		t.Fatalf("NewAuthenticator(test-proj, disabled=true) error = %v", err)
+	}
+	spaTmpl, err := web.ParseTemplates()
+	if err != nil {
+		t.Fatalf("web.ParseTemplates() error = %v", err)
+	}
+	server := NewServer(store, audioStore, nil, nil, auth, spaTmpl, web.DefaultWebConfig)
+	handler := server.Routes()
+
+	// 1. Seed a recording session and test LiveProxy orphan recovery with fallback PCM
+	orphan := &Session{
+		ID:       "sess_orphan_1",
+		DeviceID: "omi-1",
+		Title:    "Abandoned Recording",
+		Status:   StatusRecording,
+	}
+	if err := store.SaveSession(ctx, orphan); err != nil {
+		t.Fatalf("store.SaveSession(sess_orphan_1) error = %v", err)
+	}
+
+	lp := NewLiveProxy(nil, "test-proj", "global", "gemini-3.5-transcribe-live")
+	lp.SetPersistence(store, audioStore)
+	lp.recoverOrphanedSession(ctx, "sess_orphan_1", make([]byte, 32000)) // 1 second of 16kHz PCM
+
+	recovered, err := store.GetSession(ctx, "sess_orphan_1")
+	if err != nil {
+		t.Fatalf("store.GetSession(sess_orphan_1) error = %v", err)
+	}
+	if recovered.Status != StatusFailed {
+		t.Errorf("recovered.Status = %q, want %q", recovered.Status, StatusFailed)
+	}
+	if !recovered.HasAudio {
+		t.Errorf("recovered.HasAudio = false, want true")
+	}
+	reader, wavSize, err := audioStore.DownloadWAV(ctx, "sess_orphan_1")
+	if err != nil {
+		t.Fatalf("audioStore.DownloadWAV(sess_orphan_1) error = %v", err)
+	}
+	_ = reader.Close()
+	if wavSize != 44+32000 {
+		t.Errorf("recovered WAV size = %d, want %d", wavSize, 44+32000)
+	}
+
+	// 2. Test DELETE /api/sessions/{id} removes session and WAV
+	req := httptest.NewRequest(http.MethodDelete, "/api/sessions/sess_orphan_1", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("DELETE /api/sessions/sess_orphan_1 status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	if _, err := store.GetSession(ctx, "sess_orphan_1"); err == nil {
+		t.Errorf("store.GetSession(sess_orphan_1) succeeded after delete, want error")
+	}
+	if _, _, err := audioStore.DownloadWAV(ctx, "sess_orphan_1"); err == nil {
+		t.Errorf("audioStore.DownloadWAV(sess_orphan_1) succeeded after delete, want error")
+	}
+}

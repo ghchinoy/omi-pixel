@@ -525,7 +525,10 @@ const spaTemplate = `
           (s.language ? '<span>Language: ' + escapeHtml(s.language) + '</span>' : '') +
           '</div>' +
           '</div>' +
+          '<div style="display:flex; align-items:center; gap:0.5rem;">' +
           '<span class="badge badge-' + escapeHtml(s.status) + '">' + escapeHtml(s.status) + '</span>' +
+          '<button class="btn btn-danger" style="padding:0.25rem 0.65rem; font-size:0.8rem;" onclick="deleteSession(\'' + escapeHtml(sessionId) + '\')">Delete</button>' +
+          '</div>' +
           '</div>' +
           '</div>';
 
@@ -616,6 +619,26 @@ const spaTemplate = `
         renderSessionDetail(sessionId);
       } catch (e) {
         console.error("Failed to trigger reprocess", e);
+      }
+    }
+
+    async function deleteSession(sessionId) {
+      if (!confirm("Delete this recording, transcript, and stored audio permanently?")) {
+        return;
+      }
+      try {
+        const resp = await fetch("/api/sessions/" + sessionId, {
+          method: "DELETE",
+          headers: { "Authorization": "Bearer " + currentIdToken }
+        });
+        if (!resp.ok) {
+          alert("Failed to delete session (HTTP " + resp.status + ")");
+          return;
+        }
+        navigate("/");
+      } catch (e) {
+        console.error("Failed to delete session", e);
+        alert("Failed to delete session: " + e.message);
       }
     }
 
