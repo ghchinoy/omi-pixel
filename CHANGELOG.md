@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-23
+
+### Fixed
+- **Android Background Recording Foreground Service**: Registered `com.pravera.flutter_foreground_task.service.ForegroundService` (`connectedDevice|microphone`, `exported="false"`) in `AndroidManifest.xml`, started the service explicitly with `ForegroundServiceTypes.connectedDevice` at runtime (holding WakeLock + WifiLock without requiring phone `RECORD_AUDIO` for BLE capture), requested notification permission on startup, and surfaced foreground service startup failures via `SessionManager.warningStream` and an inline warning banner in `LiveScreen` instead of swallowing errors `[omi_pixel-2yv]`.
+
 ## [0.3.1] - 2026-11-23
 
 ### Changed
@@ -60,7 +65,8 @@ _Initial release._
 - Audio playback cards with turn tap-to-seek synchronization on both mobile and web clients.
 - Infrastructure automation scripts (`infra/`) and top-level `Makefile`.
 
-[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/ghchinoy/omi-pixel/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ghchinoy/omi-pixel/compare/v0.1.0...v0.2.0
