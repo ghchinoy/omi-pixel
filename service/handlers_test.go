@@ -434,3 +434,51 @@ func TestDeleteSessionAndOrphanFallbackRecovery(t *testing.T) {
 		t.Errorf("audioStore.DownloadWAV(sess_orphan_1) succeeded after delete, want error")
 	}
 }
+
+func TestNormalizeTranscriptionModeAndPersistence(t *testing.T) {
+	if got := NormalizeTranscriptionMode("SMART"); got != "smart" {
+		t.Errorf("NormalizeTranscriptionMode(%q) = %q, want %q", "SMART", got, "smart")
+	}
+	if got := NormalizeTranscriptionMode("verbatim"); got != "verbatim" {
+		t.Errorf("NormalizeTranscriptionMode(%q) = %q, want %q", "verbatim", got, "verbatim")
+	}
+	if got := NormalizeTranscriptionMode(""); got != "verbatim" {
+		t.Errorf("NormalizeTranscriptionMode(%q) = %q, want %q", "", got, "verbatim")
+	}
+
+	ctx := t.Context()
+	store := NewMemoryStore()
+	auth, err := NewAuthenticator(ctx, "test-proj", store, true)
+	if err != nil {
+		t.Fatalf("NewAuthenticator(test-proj, disabled=true) error = %v", err)
+	}
+	spaTmpl, err := web.ParseTemplates()
+	if err != nil {
+		t.Fatalf("web.ParseTemplates() error = %v", err)
+	}
+	server := NewServer(store, &NoopAudioStore{}, nil, nil, auth, spaTmpl, web.DefaultWebConfig)
+	handler := server.Routes()
+
+	body, _ := json.Marshal(CreateSessionRequest{
+		ID:                "sess-smart-mode",
+		DeviceID:          "omi-cv1",
+		Title:             "Smart Mode Test",
+		Language:          "en",
+		TranscriptionMode: "smart",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/sessions", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/sessions status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+
+	var created Session
+	if err := json.NewDecoder(rec.Body).Decode(&created); err != nil {
+		t.Fatalf("Decode(POST /api/sessions) error = %v", err)
+	}
+	if created.TranscriptionMode != "smart" {
+		t.Errorf("created.TranscriptionMode = %q, want %q", created.TranscriptionMode, "smart")
+	}
+}

@@ -32,6 +32,14 @@ func ResolveSummaryModel(requested, fallback string) string {
 	return fallback
 }
 
+// NormalizeTranscriptionMode normalizes a transcription mode string to "smart" or "verbatim".
+func NormalizeTranscriptionMode(mode string) string {
+	if strings.EqualFold(strings.TrimSpace(mode), "smart") {
+		return "smart"
+	}
+	return "verbatim"
+}
+
 type GeminiClient struct {
 	vertexAuth      *VertexAuth
 	projectID       string
@@ -69,9 +77,10 @@ func NewGeminiClient(auth *VertexAuth, projectID, location, transcribeModel, tit
 }
 
 type DiarizedResult struct {
-	Title    string    `json:"title"`
-	Summary  string    `json:"summary"`
-	Segments []Segment `json:"segments"`
+	Title           string    `json:"title"`
+	Summary         string    `json:"summary"`
+	SmartTranscript string    `json:"smart_transcript,omitempty"`
+	Segments        []Segment `json:"segments"`
 }
 
 type vertexGenerateRequest struct {
@@ -108,6 +117,7 @@ type vertexAudioTranscriptionConfig struct {
 	Diarization   bool     `json:"diarization"`
 	WordTimestamp bool     `json:"wordTimestamp"`
 	LanguageCodes []string `json:"languageCodes,omitempty"`
+	Mode          string   `json:"mode,omitempty"`
 }
 
 type vertexGenerateResponse struct {
@@ -139,7 +149,9 @@ type vertexGenerateResponse struct {
 // DiarizeAudio performs Vertex AI Gemini 3.5 Transcribe audio transcription & speaker diarization,
 // accepting either a gcsURI (gs://bucket/path) or raw WAV bytes (inlineData fallback),
 // followed by AI title (gemini-3.5-flash-lite) and optional AI summary (default: gemini-4-hydrogen).
-func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, gcsURI string, language string, generateSummary bool, summaryModelOverride string) (*DiarizedResult, error) {
+// When transcriptionMode is "smart", a parallel standalone batch SMART pass runs alongside
+// diarization (since Vertex AI mode=SMART is incompatible with diarization/wordTimestamp).
+func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, gcsURI string, language string, generateSummary bool, summaryModelOverride string, transcriptionMode string) (*DiarizedResult, error) {
 	if g.vertexAuth == nil {
 		return nil, fmt.Errorf("vertex auth credentials not initialized")
 	}
@@ -161,6 +173,20 @@ func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, g
 	}
 
 	audioPart := buildAudioPart(gcsURI, audioWavBytes)
+
+	// Launch parallel standalone SMART pass when session was recorded in Smart mode
+	type smartOut struct {
+		text string
+		err  error
+	}
+	var smartCh chan smartOut
+	if NormalizeTranscriptionMode(transcriptionMode) == "smart" {
+		smartCh = make(chan smartOut, 1)
+		go func() {
+			text, sErr := g.transcribeSmart(ctx, token, audioPart)
+			smartCh <- smartOut{text: text, err: sErr}
+		}()
+	}
 
 	reqBody := vertexGenerateRequest{
 		Contents: []vertexContent{
@@ -279,10 +305,27 @@ func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, g
 	}
 	transcriptBody := strings.TrimSpace(speakerFormatted.String())
 
+	// Collect parallel Smart transcript if requested
+	smartTranscript := ""
+	if smartCh != nil {
+		res := <-smartCh
+		if res.err != nil {
+			log.Printf("[GeminiClient] Parallel Smart transcription pass failed: %v", res.err)
+		} else {
+			smartTranscript = strings.TrimSpace(res.text)
+		}
+	}
+
+	// Prefer Smart-corrected prose as primary reference for title/summary when available
+	synthesisSource := transcriptBody
+	if smartTranscript != "" {
+		synthesisSource = fmt.Sprintf("Cleaned Smart Transcript (final self-corrected wording):\n%s\n\nSpeaker-Labeled Transcript:\n%s", smartTranscript, transcriptBody)
+	}
+
 	// 1. Generate Title with gemini-3.5-flash-lite
 	title := ""
-	if transcriptBody != "" && g.titleModel != "" {
-		titlePrompt := fmt.Sprintf("Read this conversation transcript and return ONLY a concise 3 to 6 word title summarizing the topic. No quotes, no intro.\n\nTranscript:\n%s", transcriptBody)
+	if synthesisSource != "" && g.titleModel != "" {
+		titlePrompt := fmt.Sprintf("Read this conversation transcript and return ONLY a concise 3 to 6 word title summarizing the topic. No quotes, no intro.\n\n%s", synthesisSource)
 		t, err := g.generateText(ctx, g.titleModel, titlePrompt, "")
 		if err != nil || t == "" {
 			log.Printf("[GeminiClient] Title generation with %s failed: %v", g.titleModel, err)
@@ -292,14 +335,18 @@ func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, g
 		}
 	}
 	if title == "" {
-		title = deriveTitleFromTranscript(fullTranscript.String())
+		fallbackSource := fullTranscript.String()
+		if smartTranscript != "" {
+			fallbackSource = smartTranscript
+		}
+		title = deriveTitleFromTranscript(fallbackSource)
 	}
 
 	// 2. Generate Summary with configured summary model (default: gemini-4-hydrogen) if requested
 	summary := ""
 	effectiveSummaryModel := ResolveSummaryModel(summaryModelOverride, g.summaryModel)
-	if generateSummary && transcriptBody != "" && effectiveSummaryModel != "" {
-		summaryPrompt := fmt.Sprintf("Provide a clear, concise 2 to 4 sentence summary of the key discussion points and takeaways from this conversation transcript. Plain text only, no markdown formatting or backticks.\n\nTranscript:\n%s", transcriptBody)
+	if generateSummary && synthesisSource != "" && effectiveSummaryModel != "" {
+		summaryPrompt := fmt.Sprintf("Provide a clear, concise 2 to 4 sentence summary of the key discussion points and takeaways from this conversation transcript. Plain text only, no markdown formatting or backticks.\n\n%s", synthesisSource)
 		s, err := g.generateText(ctx, effectiveSummaryModel, summaryPrompt, "LOW")
 		if err != nil || s == "" {
 			log.Printf("[GeminiClient] Summary generation with %s failed: %v", effectiveSummaryModel, err)
@@ -310,10 +357,88 @@ func (g *GeminiClient) DiarizeAudio(ctx context.Context, audioWavBytes []byte, g
 	}
 
 	return &DiarizedResult{
-		Title:    title,
-		Summary:  summary,
-		Segments: segments,
+		Title:           title,
+		Summary:         summary,
+		SmartTranscript: smartTranscript,
+		Segments:        segments,
 	}, nil
+}
+
+// transcribeSmart runs a standalone batch gemini-3.5-transcribe pass in mode=SMART
+// (with diarization=false, wordTimestamp=false, and omitted languageCodes as required by Vertex AI).
+func (g *GeminiClient) transcribeSmart(ctx context.Context, token string, audioPart vertexPart) (string, error) {
+	reqBody := vertexGenerateRequest{
+		Contents: []vertexContent{
+			{
+				Role:  "user",
+				Parts: []vertexPart{audioPart},
+			},
+		},
+		GenerationConfig: &vertexGenerationConfig{
+			AudioTranscriptionConfig: &vertexAudioTranscriptionConfig{
+				Diarization:   false,
+				WordTimestamp: false,
+				Mode:          "SMART",
+			},
+		},
+	}
+
+	payloadBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal smart transcribe request: %w", err)
+	}
+
+	endpoint := VertexBatchRESTURL(g.projectID, g.location, g.transcribeModel)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return "", fmt.Errorf("failed to create smart transcribe http request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := g.httpClient.Do(httpReq)
+	if err != nil {
+		return "", fmt.Errorf("vertex smart transcribe http request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read smart transcribe response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("vertex smart transcribe error (HTTP %d): %s", resp.StatusCode, string(respBytes))
+	}
+
+	var vResp vertexGenerateResponse
+	if err := json.Unmarshal(respBytes, &vResp); err != nil {
+		return "", fmt.Errorf("failed to parse smart transcribe response: %w", err)
+	}
+	if vResp.Error != nil {
+		return "", fmt.Errorf("vertex smart transcribe error: %s (code %d)", vResp.Error.Message, vResp.Error.Code)
+	}
+	if len(vResp.Candidates) == 0 {
+		return "", fmt.Errorf("no smart transcription candidates returned")
+	}
+
+	var sb strings.Builder
+	for _, part := range vResp.Candidates[0].Content.Parts {
+		text := ""
+		if part.AudioTranscription != nil {
+			text = strings.TrimSpace(part.AudioTranscription.Text)
+		}
+		if text == "" {
+			text = strings.TrimSpace(part.Text)
+		}
+		if text == "" {
+			continue
+		}
+		if sb.Len() > 0 {
+			sb.WriteString(" ")
+		}
+		sb.WriteString(text)
+	}
+	return strings.TrimSpace(sb.String()), nil
 }
 
 func (g *GeminiClient) generateText(ctx context.Context, model, prompt, thinkingLevel string) (string, error) {

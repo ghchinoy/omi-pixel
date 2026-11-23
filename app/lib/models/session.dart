@@ -16,6 +16,8 @@ class Session {
   final bool hasAudio;
   final SessionStatus status;
   final String language;
+  final String transcriptionMode;
+  final String smartTranscript;
   final double durationSeconds;
   final DateTime startedAt;
   final DateTime? finishedAt;
@@ -31,12 +33,17 @@ class Session {
     this.hasAudio = false,
     this.status = SessionStatus.recording,
     this.language = 'en',
+    this.transcriptionMode = 'verbatim',
+    this.smartTranscript = '',
     this.durationSeconds = 0.0,
     required this.startedAt,
     this.finishedAt,
     required this.createdAt,
     this.segments = const [],
   });
+
+  bool get isSmartMode =>
+      transcriptionMode.toLowerCase() == 'smart' || smartTranscript.trim().isNotEmpty;
 
   factory Session.fromJson(Map<String, dynamic> json) {
     var rawSegments = json['segments'] as List<dynamic>? ?? [];
@@ -56,6 +63,8 @@ class Session {
       hasAudio: hasAudio,
       status: _parseStatus(json['status'] as String?),
       language: json['language'] as String? ?? 'en',
+      transcriptionMode: json['transcription_mode'] as String? ?? 'verbatim',
+      smartTranscript: json['smart_transcript'] as String? ?? '',
       durationSeconds: (json['duration_seconds'] as num?)?.toDouble() ?? 0.0,
       startedAt: _parseLocalDateTime(json['started_at'] as String?) ?? DateTime.now(),
       finishedAt: _parseLocalDateTime(json['finished_at'] as String?),
@@ -91,6 +100,8 @@ class Session {
     'has_audio': hasAudio,
     'status': status.name,
     'language': language,
+    'transcription_mode': transcriptionMode,
+    if (smartTranscript.isNotEmpty) 'smart_transcript': smartTranscript,
     'duration_seconds': durationSeconds,
     'started_at': startedAt.toUtc().toIso8601String(),
     'finished_at': finishedAt?.toUtc().toIso8601String(),
@@ -104,6 +115,8 @@ class Session {
     String? audioUrl,
     bool? hasAudio,
     SessionStatus? status,
+    String? transcriptionMode,
+    String? smartTranscript,
     double? durationSeconds,
     DateTime? finishedAt,
     List<Segment>? segments,
@@ -117,6 +130,8 @@ class Session {
       hasAudio: hasAudio ?? this.hasAudio,
       status: status ?? this.status,
       language: language,
+      transcriptionMode: transcriptionMode ?? this.transcriptionMode,
+      smartTranscript: smartTranscript ?? this.smartTranscript,
       durationSeconds: durationSeconds ?? this.durationSeconds,
       startedAt: startedAt,
       finishedAt: finishedAt ?? this.finishedAt,

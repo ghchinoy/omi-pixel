@@ -780,6 +780,25 @@ class _HomeScreenState extends State<HomeScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (session.isSmartMode) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: lustrous.speakerColorFor(0).container,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        'SMART',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: lustrous.speakerColorFor(0).onContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(width: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(

@@ -60,6 +60,7 @@ class ApiClient {
           'device_id': session.deviceId,
           'title': session.title,
           'language': session.language,
+          'transcription_mode': session.transcriptionMode,
           'started_at': session.startedAt.toUtc().toIso8601String(),
         }),
       );
@@ -80,8 +81,18 @@ class ApiClient {
     return result.session;
   }
 
-  Future<AudioUploadResult> uploadAudioFile(String sessionId, File wavFile, {bool? summary}) {
-    return uploadAudioDetailed(sessionId, wavFile: wavFile, summary: summary);
+  Future<AudioUploadResult> uploadAudioFile(
+    String sessionId,
+    File wavFile, {
+    bool? summary,
+    String? mode,
+  }) {
+    return uploadAudioDetailed(
+      sessionId,
+      wavFile: wavFile,
+      summary: summary,
+      mode: mode,
+    );
   }
 
   /// Uploads WAV audio (from [wavFile] or [wavBytes]) to `POST /api/sessions/{id}/audio`.
@@ -95,6 +106,7 @@ class ApiClient {
     Uint8List? wavBytes,
     bool? summary,
     String? summaryModel,
+    String? mode,
     String? baseUrlOverride,
     Future<String?> Function({bool forceRefresh})? tokenProvider,
     Future<http.Response> Function(http.MultipartRequest req)? sendRequest,
@@ -109,8 +121,11 @@ class ApiClient {
 
     final shouldSummarize = summary ?? SettingsService.instance.generateSummary;
     final selectedSummaryModel = summaryModel ?? SettingsService.instance.summaryModel;
+    final selectedMode = mode ?? SettingsService.instance.liveTranscriptionMode;
     final url = Uri.parse(
-      '$baseUrl/api/sessions/$sessionId/audio?summary=$shouldSummarize&summary_model=${Uri.encodeQueryComponent(selectedSummaryModel)}',
+      '$baseUrl/api/sessions/$sessionId/audio?summary=$shouldSummarize'
+      '&summary_model=${Uri.encodeQueryComponent(selectedSummaryModel)}'
+      '&mode=${Uri.encodeQueryComponent(selectedMode)}',
     );
     final getToken = tokenProvider ?? ({bool forceRefresh = false}) => AuthService.instance.getIdToken(forceRefresh: forceRefresh);
     final doSend = sendRequest ??

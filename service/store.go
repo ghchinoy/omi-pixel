@@ -32,19 +32,21 @@ type Segment struct {
 }
 
 type Session struct {
-	ID              string        `json:"id" firestore:"id"`
-	DeviceID        string        `json:"device_id" firestore:"device_id"`
-	Title           string        `json:"title" firestore:"title"`
-	Summary         string        `json:"summary" firestore:"summary"`
-	AudioURL        string        `json:"audio_url,omitempty" firestore:"audio_url,omitempty"`
-	HasAudio        bool          `json:"has_audio" firestore:"-"`
-	Status          SessionStatus `json:"status" firestore:"status"`
-	Language        string        `json:"language" firestore:"language"`
-	DurationSeconds float64       `json:"duration_seconds" firestore:"duration_seconds"`
-	StartedAt       time.Time     `json:"started_at" firestore:"started_at"`
-	FinishedAt      *time.Time    `json:"finished_at,omitempty" firestore:"finished_at,omitempty"`
-	CreatedAt       time.Time     `json:"created_at" firestore:"created_at"`
-	UpdatedAt       time.Time     `json:"updated_at" firestore:"updated_at"`
+	ID                string        `json:"id" firestore:"id"`
+	DeviceID          string        `json:"device_id" firestore:"device_id"`
+	Title             string        `json:"title" firestore:"title"`
+	Summary           string        `json:"summary" firestore:"summary"`
+	AudioURL          string        `json:"audio_url,omitempty" firestore:"audio_url,omitempty"`
+	HasAudio          bool          `json:"has_audio" firestore:"-"`
+	Status            SessionStatus `json:"status" firestore:"status"`
+	Language          string        `json:"language" firestore:"language"`
+	TranscriptionMode string        `json:"transcription_mode,omitempty" firestore:"transcription_mode,omitempty"`
+	SmartTranscript   string        `json:"smart_transcript,omitempty" firestore:"smart_transcript,omitempty"`
+	DurationSeconds   float64       `json:"duration_seconds" firestore:"duration_seconds"`
+	StartedAt         time.Time     `json:"started_at" firestore:"started_at"`
+	FinishedAt        *time.Time    `json:"finished_at,omitempty" firestore:"finished_at,omitempty"`
+	CreatedAt         time.Time     `json:"created_at" firestore:"created_at"`
+	UpdatedAt         time.Time     `json:"updated_at" firestore:"updated_at"`
 }
 
 type SessionDetail struct {

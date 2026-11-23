@@ -30,6 +30,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   bool _detailLoading = false;
   bool _retryingUpload = false;
   double _currentPositionSec = 0.0;
+  String _transcriptView = 'diarized';
 
   StreamSubscription? _posSub;
   StreamSubscription<List<Session>>? _sessionsSub;
@@ -39,12 +40,21 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   void initState() {
     super.initState();
     _session = widget.session;
+    if (_session.smartTranscript.trim().isNotEmpty) {
+      _transcriptView = 'smart';
+    }
     _sessionsSub = SessionManager.instance.sessionsStream.listen((sessions) {
       if (!mounted) return;
       for (final s in sessions) {
         if (s.id == _session.id) {
           final hadNoAudio = !_session.hasAudio && _session.audioUrl.isEmpty;
-          setState(() => _session = s);
+          final hadNoSmart = _session.smartTranscript.trim().isEmpty;
+          setState(() {
+            _session = s;
+            if (hadNoSmart && s.smartTranscript.trim().isNotEmpty) {
+              _transcriptView = 'smart';
+            }
+          });
           if (hadNoAudio && (s.hasAudio || s.audioUrl.isNotEmpty)) {
             _initAudio();
           }
@@ -92,9 +102,13 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       final detailed = await ApiClient.instance.getSession(_session.id);
       if (detailed != null && mounted) {
         final hadNoAudio = !_session.hasAudio && _session.audioUrl.isEmpty;
+        final hadNoSmart = _session.smartTranscript.trim().isEmpty;
         setState(() {
           _session = detailed;
           _detailLoading = false;
+          if (hadNoSmart && detailed.smartTranscript.trim().isNotEmpty) {
+            _transcriptView = 'smart';
+          }
         });
         SessionManager.instance.updateCachedSession(detailed);
 
@@ -187,11 +201,16 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     buffer.writeln('Title: ${_session.title}');
     buffer.writeln('Date: ${DateFormat('yyyy-MM-dd HH:mm').format(_session.startedAt.toLocal())}');
     if (_session.summary.isNotEmpty) {
-      buffer.writeln('\nSummary:\n${_session.summary}\n');
+      buffer.writeln('\nSummary:\n${_session.summary}');
     }
-    buffer.writeln('Transcript:');
-    for (final seg in _session.segments) {
-      buffer.writeln('[${_formatDuration(seg.start)}] ${seg.speaker}: ${seg.text}');
+    if (_session.smartTranscript.trim().isNotEmpty) {
+      buffer.writeln('\nSmart Corrected Transcript:\n${_session.smartTranscript.trim()}');
+    }
+    if (_session.segments.isNotEmpty) {
+      buffer.writeln('\nDiarized Transcript:');
+      for (final seg in _session.segments) {
+        buffer.writeln('[${_formatDuration(seg.start)}] ${seg.speaker}: ${seg.text}');
+      }
     }
 
     Clipboard.setData(ClipboardData(text: buffer.toString()));
@@ -321,23 +340,57 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Row(
+                  Wrap(
+                    spacing: 14,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Icon(Icons.calendar_today, size: 14, color: theme.colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 4),
-                      Text(
-                        dateFormat.format(session.startedAt.toLocal()),
-                        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.calendar_today, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                          const SizedBox(width: 4),
+                          Text(
+                            dateFormat.format(session.startedAt.toLocal()),
+                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      if (session.durationSeconds > 0) ...[
-                        Icon(Icons.timer, size: 14, color: theme.colorScheme.onSurfaceVariant),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatDuration(session.durationSeconds),
-                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                      if (session.durationSeconds > 0)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.timer, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                            const SizedBox(width: 4),
+                            Text(
+                              _formatDuration(session.durationSeconds),
+                              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                            ),
+                          ],
                         ),
-                      ],
+                      if (session.isSmartMode)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: lustrous.speakerColorFor(0).container,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.auto_fix_high, size: 12, color: lustrous.speakerColorFor(0).onContainer),
+                              const SizedBox(width: 4),
+                              Text(
+                                'SMART',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: lustrous.speakerColorFor(0).onContainer,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ],
@@ -610,37 +663,96 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           ],
 
           const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    'Diarized Turns (${session.segments.length})',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+          if (session.smartTranscript.trim().isNotEmpty) ...[
+            SegmentedButton<String>(
+              segments: [
+                const ButtonSegment(
+                  value: 'smart',
+                  label: Text('Smart Transcript'),
+                  icon: Icon(Icons.auto_fix_high, size: 16),
+                ),
+                ButtonSegment(
+                  value: 'diarized',
+                  label: Text('Diarized (${session.segments.length})'),
+                  icon: const Icon(Icons.people_outline, size: 16),
+                ),
+              ],
+              selected: {_transcriptView},
+              onSelectionChanged: (selection) {
+                if (selection.isNotEmpty) {
+                  setState(() => _transcriptView = selection.first);
+                }
+              },
+            ),
+            const SizedBox(height: 14),
+          ] else ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Diarized Turns (${session.segments.length})',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
+                    if (_detailLoading) ...[
+                      const SizedBox(width: 8),
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ],
+                  ],
+                ),
+                if (_audioAvailable)
+                  Text(
+                    'Tap turn to listen',
+                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary),
                   ),
-                  if (_detailLoading) ...[
-                    const SizedBox(width: 8),
-                    const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          if (session.smartTranscript.trim().isNotEmpty && _transcriptView == 'smart')
+            Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: theme.colorScheme.outlineVariant),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.auto_fix_high, size: 16, color: lustrous.speakerColorFor(0).onContainer),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Smart Corrected Transcript (self-corrections resolved)',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SelectableText(
+                      session.smartTranscript.trim(),
+                      style: theme.textTheme.bodyLarge?.copyWith(height: 1.6, fontSize: 15.5),
                     ),
                   ],
-                ],
-              ),
-              if (_audioAvailable)
-                Text(
-                  'Tap turn to listen',
-                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary),
                 ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          if (session.segments.isEmpty)
+              ),
+            )
+          else if (session.segments.isEmpty)
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(32.0),

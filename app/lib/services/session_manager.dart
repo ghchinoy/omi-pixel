@@ -309,6 +309,7 @@ class SessionManager {
       title: 'Conversation with ${device.name}',
       status: SessionStatus.recording,
       language: SettingsService.instance.preferredLanguage,
+      transcriptionMode: SettingsService.instance.liveTranscriptionMode,
       startedAt: now,
       createdAt: now,
     );
@@ -539,7 +540,12 @@ class SessionManager {
     })? saveSegments,
   }) async {
     final isConfigured = apiConfigured ?? ApiClient.instance.isConfigured;
-    final doUploadFile = uploadAudioFile ?? ApiClient.instance.uploadAudioFile;
+    final doUploadFile = uploadAudioFile ??
+        (String id, File file) => ApiClient.instance.uploadAudioFile(
+              id,
+              file,
+              mode: session.transcriptionMode,
+            );
     final doSaveSegments = saveSegments ?? ApiClient.instance.saveSegments;
 
     Session updatedSession = session.copyWith(

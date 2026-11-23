@@ -63,6 +63,8 @@ void main() {
         summary: 'Discussion about Gemini 3.5 Transcribe Live integration.',
         status: SessionStatus.completed,
         language: 'en',
+        transcriptionMode: 'smart',
+        smartTranscript: 'Let us meet Thursday at 3:00 p.m.',
         durationSeconds: 120.0,
         startedAt: DateTime.utc(2026, 8, 29, 10, 0),
         createdAt: DateTime.utc(2026, 8, 29, 10, 0),
@@ -77,6 +79,9 @@ void main() {
       final parsedSession = Session.fromJson(sessionJson);
       expect(parsedSession.id, session.id);
       expect(parsedSession.status, SessionStatus.completed);
+      expect(parsedSession.transcriptionMode, 'smart');
+      expect(parsedSession.smartTranscript, 'Let us meet Thursday at 3:00 p.m.');
+      expect(parsedSession.isSmartMode, isTrue);
       expect(parsedSession.segments.first.speaker, 'Speaker 1');
       expect(parsedSession.startedAt.isUtc, isFalse);
       expect(parsedSession.createdAt.isUtc, isFalse);
@@ -202,6 +207,53 @@ void main() {
       expect(find.text('Speaker 2'), findsOneWidget);
       expect(find.text('Let us deploy the Go service on Cloud Run.'), findsOneWidget);
       expect(find.text('And connect the Omi hardware over BLE.'), findsOneWidget);
+    });
+
+    testWidgets('SessionDetailScreen shows SMART badge and toggles Smart Transcript vs Diarized Turns', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.instance.init();
+
+      final session = Session(
+        id: 'sess_smart_ui',
+        deviceId: 'omi_cv1',
+        title: 'Design Review Scheduling',
+        summary: 'Scheduled the design review for Thursday at 3:00 p.m.',
+        status: SessionStatus.completed,
+        transcriptionMode: 'smart',
+        smartTranscript: 'Let us schedule the design review for Thursday at 3:00 p.m.',
+        durationSeconds: 8.0,
+        startedAt: DateTime.now(),
+        createdAt: DateTime.now(),
+        segments: [
+          Segment(
+            speaker: 'Speaker 1',
+            speakerId: 0,
+            text: 'Let us schedule the design review for Tuesday. Wait, no, Thursday at 3:00 p.m.',
+            start: 0.0,
+            end: 8.0,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: LustrousTheme.light(),
+          home: SessionDetailScreen(session: session),
+        ),
+      );
+      await tester.pump();
+
+      // Defaults to Smart Transcript view with SMART badge visible
+      expect(find.text('SMART'), findsOneWidget);
+      expect(find.text('Let us schedule the design review for Thursday at 3:00 p.m.'), findsOneWidget);
+      expect(find.textContaining('Wait, no'), findsNothing);
+
+      // Toggle to Diarized turns view
+      await tester.tap(find.text('Diarized (1)'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Speaker 1'), findsOneWidget);
+      expect(find.textContaining('Wait, no'), findsOneWidget);
     });
   });
 

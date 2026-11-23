@@ -121,11 +121,12 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 }
 
 type CreateSessionRequest struct {
-	ID        string    `json:"id"`
-	DeviceID  string    `json:"device_id"`
-	Title     string    `json:"title"`
-	Language  string    `json:"language"`
-	StartedAt time.Time `json:"started_at"`
+	ID                string    `json:"id"`
+	DeviceID          string    `json:"device_id"`
+	Title             string    `json:"title"`
+	Language          string    `json:"language"`
+	TranscriptionMode string    `json:"transcription_mode,omitempty"`
+	StartedAt         time.Time `json:"started_at"`
 }
 
 func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
@@ -148,12 +149,13 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	req.StartedAt = req.StartedAt.UTC()
 
 	session := &Session{
-		ID:        req.ID,
-		DeviceID:  req.DeviceID,
-		Title:     req.Title,
-		Language:  req.Language,
-		Status:    StatusRecording,
-		StartedAt: req.StartedAt,
+		ID:                req.ID,
+		DeviceID:          req.DeviceID,
+		Title:             req.Title,
+		Language:          req.Language,
+		TranscriptionMode: NormalizeTranscriptionMode(req.TranscriptionMode),
+		Status:            StatusRecording,
+		StartedAt:         req.StartedAt,
 	}
 
 	if err := s.store.SaveSession(r.Context(), session); err != nil {
@@ -278,12 +280,17 @@ func (s *Server) handleUploadAudio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. Check query params for summary preference and optional allowlisted summary model
+	// 3. Check query params for summary preference, summary model, and transcription mode
 	generateSummary := true
 	if summaryParam := r.URL.Query().Get("summary"); summaryParam != "" {
 		generateSummary = (summaryParam == "true" || summaryParam == "1")
 	}
 	summaryModelOverride := ResolveSummaryModel(r.URL.Query().Get("summary_model"), "")
+	if modeParam := r.URL.Query().Get("mode"); modeParam != "" {
+		session.TranscriptionMode = NormalizeTranscriptionMode(modeParam)
+	} else if session.TranscriptionMode == "" {
+		session.TranscriptionMode = "verbatim"
+	}
 
 	// 4. Optionally upload to GCS (or local in-memory audio store)
 	var gcsURI string
@@ -349,8 +356,8 @@ func (s *Server) runDiarizationAndPersist(
 		return nil, fmt.Errorf("gemini client is not configured")
 	}
 
-	log.Printf("Running Gemini 3.5 diarization for session %s (gcs=%s, bytes=%d, summary=%v, summaryModel=%q)...", session.ID, gcsURI, len(audioBytes), generateSummary, summaryModelOverride)
-	diarized, err := s.gemini.DiarizeAudio(ctx, audioBytes, gcsURI, session.Language, generateSummary, summaryModelOverride)
+	log.Printf("Running Gemini 3.5 diarization for session %s (gcs=%s, bytes=%d, summary=%v, summaryModel=%q, mode=%q)...", session.ID, gcsURI, len(audioBytes), generateSummary, summaryModelOverride, session.TranscriptionMode)
+	diarized, err := s.gemini.DiarizeAudio(ctx, audioBytes, gcsURI, session.Language, generateSummary, summaryModelOverride, session.TranscriptionMode)
 	if err != nil {
 		log.Printf("Gemini diarization failed for session %s: %v", session.ID, err)
 		session.Status = StatusFailed
@@ -366,6 +373,9 @@ func (s *Server) runDiarizationAndPersist(
 	}
 	if diarized.Summary != "" {
 		session.Summary = diarized.Summary
+	}
+	if diarized.SmartTranscript != "" {
+		session.SmartTranscript = diarized.SmartTranscript
 	}
 	if len(diarized.Segments) > 0 {
 		lastSeg := diarized.Segments[len(diarized.Segments)-1]
@@ -417,6 +427,9 @@ func (s *Server) handleReprocessSession(w http.ResponseWriter, r *http.Request) 
 		generateSummary = (summaryParam == "true" || summaryParam == "1")
 	}
 	summaryModelOverride := ResolveSummaryModel(r.URL.Query().Get("summary_model"), "")
+	if modeParam := r.URL.Query().Get("mode"); modeParam != "" {
+		session.TranscriptionMode = NormalizeTranscriptionMode(modeParam)
+	}
 
 	var gcsURI string
 	if strings.HasPrefix(session.AudioURL, "gs://") {

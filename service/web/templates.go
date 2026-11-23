@@ -475,12 +475,16 @@ const spaTemplate = `<!doctype html>
           const durStr = s.duration_seconds > 0 ? Math.round(s.duration_seconds) + "s" : "";
           const tone = statusBadgeTone(s.status);
 
+          const isSmart = s.transcription_mode === "smart" || Boolean(s.smart_transcript);
           cardsHtml +=
             '<lustrous-pressable class="session-card" data-session-id="' + escapeHtml(s.id) + '" background="surface-bright" border border-radius="l" padding="l" shadow="1">' +
             '<lustrous-flex direction="column" gap="s">' +
             '<lustrous-flex align="center" justify="space-between" gap="m">' +
             '<lustrous-text variant="title-medium" max-lines="1">' + escapeHtml(s.title || "Untitled Conversation") + '</lustrous-text>' +
+            '<lustrous-flex align="center" gap="xs">' +
+            (isSmart ? '<lustrous-badge tone="cobalt">SMART</lustrous-badge>' : "") +
             '<lustrous-badge tone="' + tone + '">' + escapeHtml((s.status || "unknown").toUpperCase()) + '</lustrous-badge>' +
+            '</lustrous-flex>' +
             '</lustrous-flex>' +
             (s.summary
               ? '<lustrous-text variant="body-medium" muted max-lines="2">' + escapeHtml(s.summary) + '</lustrous-text>'
@@ -524,6 +528,8 @@ const spaTemplate = `<!doctype html>
         const ts = s.started_at || s.created_at;
         const dateStr = ts ? new Date(ts).toLocaleString() : "-";
         const durStr = s.duration_seconds > 0 ? s.duration_seconds.toFixed(1) + "s" : "";
+        const isSmart = s.transcription_mode === "smart" || Boolean(s.smart_transcript);
+        const hasSmartTranscript = Boolean(s.smart_transcript && s.smart_transcript.trim());
 
         let statusBannerHtml = "";
         if (s.status === "processing") {
@@ -571,6 +577,18 @@ const spaTemplate = `<!doctype html>
           }
         }
 
+        const smartPanelHtml = hasSmartTranscript
+          ? '<lustrous-box id="smart-transcript-panel" background="surface-bright" border border-radius="l" padding="xl">' +
+            '<lustrous-flex direction="column" gap="m">' +
+            '<lustrous-flex align="center" gap="s">' +
+            '<lustrous-badge tone="cobalt">SMART CORRECTED</lustrous-badge>' +
+            '<lustrous-text variant="body-small" muted>Disfluencies removed &amp; inline verbal self-corrections resolved by Gemini 3.5 Transcribe Smart mode.</lustrous-text>' +
+            '</lustrous-flex>' +
+            '<lustrous-text variant="body-large" style="line-height:1.7;">' + escapeHtml(s.smart_transcript) + '</lustrous-text>' +
+            '</lustrous-flex>' +
+            '</lustrous-box>'
+          : "";
+
         main.innerHTML =
           '<lustrous-flex direction="column" gap="l">' +
           '<lustrous-flex align="center" justify="space-between" gap="m" wrap="wrap">' +
@@ -588,7 +606,10 @@ const spaTemplate = `<!doctype html>
           '<lustrous-flex direction="column" gap="s">' +
           '<lustrous-flex align="center" justify="space-between" gap="m" wrap="wrap">' +
           '<lustrous-text variant="headline-medium" heading="2">' + escapeHtml(s.title || "Conversation Session") + '</lustrous-text>' +
+          '<lustrous-flex align="center" gap="xs">' +
+          (isSmart ? '<lustrous-badge tone="cobalt">SMART</lustrous-badge>' : "") +
           '<lustrous-badge tone="' + statusBadgeTone(s.status) + '">' + escapeHtml((s.status || "unknown").toUpperCase()) + '</lustrous-badge>' +
+          '</lustrous-flex>' +
           '</lustrous-flex>' +
           '<div class="meta-row">' +
           '<span class="meta-item"><lustrous-icon name="clock" size="xs"></lustrous-icon>' + escapeHtml(dateStr) + '</span>' +
@@ -615,9 +636,38 @@ const spaTemplate = `<!doctype html>
 
           summaryHtml +
 
-          '<lustrous-text variant="title-large" heading="3">Diarized Transcript (' + segs.length + ' turns)</lustrous-text>' +
-          '<lustrous-flex id="transcript-turns" direction="column" gap="m">' + turnsHtml + '</lustrous-flex>' +
+          '<lustrous-flex align="center" justify="space-between" gap="m" wrap="wrap">' +
+          '<lustrous-text variant="title-large" heading="3">' +
+          (hasSmartTranscript ? "Transcript" : "Diarized Transcript (" + segs.length + " turns)") +
+          '</lustrous-text>' +
+          (hasSmartTranscript
+            ? '<lustrous-segmented-control id="transcript-view-switcher" label="Transcript view" size="s"></lustrous-segmented-control>'
+            : "") +
+          '</lustrous-flex>' +
+          smartPanelHtml +
+          '<lustrous-flex id="transcript-turns" direction="column" gap="m"' +
+          (hasSmartTranscript ? ' style="display:none;"' : "") +
+          '>' + turnsHtml + '</lustrous-flex>' +
           '</lustrous-flex>';
+
+        // Wire Smart vs Diarized view switcher when Smart transcript is present
+        if (hasSmartTranscript) {
+          const switcher = document.getElementById("transcript-view-switcher");
+          const smartPanel = document.getElementById("smart-transcript-panel");
+          const turnsPanel = document.getElementById("transcript-turns");
+          if (switcher) {
+            switcher.options = [
+              { value: "smart", label: "Smart Transcript" },
+              { value: "diarized", label: "Diarized (" + segs.length + ")" },
+            ];
+            switcher.value = "smart";
+            switcher.addEventListener("lustrous-change", (e) => {
+              const mode = e.detail?.value || "smart";
+              if (smartPanel) smartPanel.style.display = mode === "smart" ? "" : "none";
+              if (turnsPanel) turnsPanel.style.display = mode === "diarized" ? "" : "none";
+            });
+          }
+        }
 
         // Wire event listeners (zero inline onclick)
         document.getElementById("back-sessions-btn")?.addEventListener("click", () => navigate("/"));
@@ -664,11 +714,16 @@ const spaTemplate = `<!doctype html>
     async function copyTranscriptToClipboard(session, segs) {
       const lines = ["Title: " + (session.title || "Conversation")];
       if (session.summary) {
-        lines.push("", "Summary:", session.summary, "");
+        lines.push("", "Summary:", session.summary);
       }
-      lines.push("Transcript:");
-      for (const seg of segs) {
-        lines.push("[" + seg.start.toFixed(1) + "s] " + seg.speaker + ": " + seg.text);
+      if (session.smart_transcript) {
+        lines.push("", "Smart Corrected Transcript:", session.smart_transcript);
+      }
+      if (segs.length > 0) {
+        lines.push("", "Diarized Transcript:");
+        for (const seg of segs) {
+          lines.push("[" + seg.start.toFixed(1) + "s] " + seg.speaker + ": " + seg.text);
+        }
       }
       try {
         await navigator.clipboard.writeText(lines.join("\n"));
