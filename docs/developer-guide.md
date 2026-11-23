@@ -157,7 +157,41 @@ infra/
 
 ---
 
-## 5. Backend REST & WebSocket API Specification
+## 5. Flutter Widget Tree & Reactive State Architecture
+
+To keep the Pixel companion featherweight and dependency-minimal, `app/` avoids heavy external state-management frameworks (such as Riverpod, BLoC, or Provider). Instead, **singleton domain services** (`SessionManager`, `BleService`, `SettingsService`, `AuthService`) broadcast state via standard Dart `StreamController.broadcast()` streams and Flutter `ValueNotifier`s, consumed directly by `StreamBuilder` and `ValueListenableBuilder` widgets.
+
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="diagrams/widget-tree-light.webp">
+  <img src="diagrams/widget-tree.webp" alt="Omi-Pixel Flutter Widget Tree and Reactive State Architecture">
+</picture>
+
+### Root Bootstrap & Global Navigation (`app/lib/main.dart`)
+- **`OmiPixelApp`** wraps `MaterialApp` in a `ValueListenableBuilder<ThemeMode>` subscribed to `SettingsService.instance.themeModeNotifier`, toggling between `LustrousTheme.light()` (Mineral Slate) and `LustrousTheme.dark()` (Obsidian Slate) live with zero restart.
+- **`appNavigatorKey`** (`GlobalKey<NavigatorState>`) and the `/live` named route allow two out-of-tree triggers to control navigation safely without duplicating screens (guarded by `LiveScreen.isActive`):
+  1. **Android Foreground Notification Tap** (`FlutterForegroundTask.addTaskDataCallback` → `'open_live_recording'`) pushes `LiveScreen` when returning from another app.
+  2. **Omi Hardware Button Events** (`SessionManager.hardwareButtonActionStream` → `'started'` / `'stopped'`) push `LiveScreen` when started in foreground or pop `LiveScreen` when finished via double-tap.
+
+### Screen Responsibilities & Reactive Bindings
+- **`HomeScreen` (`app/lib/ui/home_screen.dart`)**:
+  - `_buildDeviceCard()` subscribes to `BleService.deviceStream` and `reconnectingStream`, launching `_ScanBottomSheetContent` for BLE discovery.
+  - `_buildRecordingCta()` subscribes to `SessionManager.recordingStateStream` (switching between `"Start Conversation"` and the red `"Recording in Progress"` resume banner with live `durationStream` timer) and `SettingsService.liveModeNotifier` (supporting long-press to open the **Live Mode Picker** bottom sheet).
+  - `_buildPendingUploadsCard()` merges `pendingUploadsStream` and `diarizingSessionsStream`, surfacing one-tap **Retry Upload** only for queued WAVs that are not actively uploading.
+  - The session list subscribes to `sessionsStream` (with `SMART` + `DIARIZING` / `COMPLETED` / `FAILED` badges) and listens to `diarizationCompletedStream` to display an auto-dismissing completion SnackBar (`persist: false`).
+- **`LiveScreen` (`app/lib/ui/live_screen.dart`)**:
+  - Wrapped in `PopScope(canPop: false)` so Android back gestures open a 3-way dialog (**Stay** / **Minimize** / **Finish & Diarize**) instead of abandoning an active session; the AppBar `⌄` button minimizes directly to `HomeScreen` while recording continues.
+  - Renders `warningStream` alerts, live `durationStream` timer, `audioHealthStream` pill (bytes, packet count, 5s stall & BLE disconnect detection), and auto-scrolling `transcriptStream`.
+  - Tapping **Finish Recording & Diarize** runs a non-blocking stop (`<100ms`), pops back to `HomeScreen`, and leaves the WAV uploading in the background.
+- **`SessionDetailScreen` (`app/lib/ui/session_detail_screen.dart`)**:
+  - Subscribes to `SessionManager.sessionsStream` and runs a 4-second polling `Timer` while `status == processing`, automatically updating title, summary, turns, and audio availability when background diarization finishes.
+  - Integrates `just_audio`'s `AudioPlayer` (`playerStateStream`, `durationStream`, `positionStream`) with tap-to-seek speaker turns colored by `LustrousColors.speakerColorFor(speakerId)`.
+  - When `smartTranscript` is present, displays a Material 3 `SegmentedButton` toggling between **Smart Transcript** (`SelectableText`) and **Diarized (N)** turns.
+- **`SettingsScreen` & `LoginScreen` (`settings_screen.dart`, `login_screen.dart`)**:
+  - Manages Google Sign-In (`LoginScreen`), Cloud Run URL + `/api/health` version probe, **Summary Generation Model** dropdown (`gemini-4-hydrogen` default / `gemini-3.8-flash`), Lustrous **Light / Auto / Dark** `SegmentedButton`, Android battery-optimization exemption card, and **Omi Hardware Button Control** toggle + **Test Haptic** (subscribing to `BleService.deviceStream` for live connection state).
+
+---
+
+## 6. Backend REST & WebSocket API Specification
 
 ### Health Check
 - **Endpoint**: `GET /api/health`
@@ -229,7 +263,7 @@ infra/
 
 ---
 
-## 6. Build and Verification Suite
+## 7. Build and Verification Suite
 
 ```bash
 # Run full Go + Flutter unit/widget tests
@@ -247,7 +281,7 @@ cd service && go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 ---
 
-## 7. Extension Points
+## 8. Extension Points
 
 1. **Custom Speaker Naming**: Extend `SessionDetailScreen` and the Web Review SPA to let users rename `Speaker 1`/`Speaker 2` labels and persist speaker aliases back to Firestore.
 2. **Cloud Tasks Worker Queue**: If deploying with strict request-based CPU throttling and wanting server-side `202 Accepted` diarization detached from mobile HTTP timeouts, wire `handleUploadAudio?async=true` to enqueue an OIDC-authenticated Cloud Tasks HTTP job targeting `POST /api/sessions/{id}/reprocess`.

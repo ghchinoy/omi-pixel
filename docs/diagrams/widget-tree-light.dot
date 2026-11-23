@@ -1,0 +1,149 @@
+digraph OmiPixelWidgetTreeLight {
+    graph [
+        rankdir=TB,
+        bgcolor="#f8fafc",
+        fontname="Helvetica,Arial,sans-serif",
+        fontsize=12,
+        pad="0.5",
+        nodesep="0.45",
+        ranksep="0.55",
+        splines=polyline
+    ];
+
+    node [
+        shape=box,
+        style="filled,rounded",
+        fontname="Helvetica,Arial,sans-serif",
+        fontsize=10.5,
+        color="#cbd5e1",
+        fontcolor="#0f172a",
+        penwidth=1.4,
+        margin="0.18,0.12"
+    ];
+
+    edge [
+        fontname="Helvetica,Arial,sans-serif",
+        fontsize=9,
+        color="#64748b",
+        fontcolor="#1d4ed8",
+        penwidth=1.2,
+        arrowsize=0.75
+    ];
+
+    // App Root
+    subgraph cluster_root {
+        label="Application Root (app/lib/main.dart)";
+        fontcolor="#475569";
+        color="#cbd5e1";
+        style="rounded";
+        bgcolor="#f1f5f9";
+
+        omi_app [label="OmiPixelApp\nValueListenableBuilder<ThemeMode>\n(SettingsService.themeModeNotifier)", fillcolor="#dbeafe", color="#1d4ed8", fontcolor="#1e3a8a"];
+        mat_app [label="MaterialApp\nLustrousTheme.light() / .dark()\nappNavigatorKey • routes: {'/live'}", fillcolor="#ffffff", color="#1d4ed8"];
+        global_hooks [label="Global Navigation Triggers\n• Android Notification Tap -> /live\n• Omi Button Start/Stop -> push/pop LiveScreen", fillcolor="#ccfbf1", color="#0f766e", fontcolor="#134e4a"];
+
+        omi_app -> mat_app;
+        global_hooks -> mat_app [style=dashed, label="appNavigatorKey"];
+    }
+
+    // HomeScreen
+    subgraph cluster_home {
+        label="HomeScreen (Default Route)";
+        fontcolor="#475569";
+        color="#cbd5e1";
+        style="rounded";
+        bgcolor="#f1f5f9";
+
+        home_root [label="HomeScreen\nScaffold + RefreshIndicator + ListView\n(listens: diarizationCompletedStream)", fillcolor="#ffffff", color="#1d4ed8"];
+        home_device [label="_buildDeviceCard()\nStreamBuilder: deviceStream\n& reconnectingStream", fillcolor="#ffffff"];
+        home_cta [label="_buildRecordingCta()\nStreamBuilder: recordingStateStream\n• Idle: Start Conversation (+ long-press)\n• Active: Recording Banner + Timer", fillcolor="#dbeafe", color="#1d4ed8", fontcolor="#1e3a8a"];
+        home_pending [label="_buildPendingUploadsCard()\nStreamBuilder: pendingUploadsStream\n& diarizingSessionsStream (Retry CTA)", fillcolor="#fef3c7", color="#b45309", fontcolor="#92400e"];
+        home_list [label="Recent Conversations\nStreamBuilder: sessionsStream\nSession Cards (SMART + Status Badges)", fillcolor="#d1fae5", color="#047857", fontcolor="#065f46"];
+        scan_sheet [label="_ScanBottomSheetContent\nModal Bottom Sheet (BLE Scan & Connect)", fillcolor="#ffffff", style="filled,rounded,dashed"];
+        mode_sheet [label="Live Mode Picker Sheet\nVerbatim vs Smart (Self-Corrections)", fillcolor="#ffffff", style="filled,rounded,dashed"];
+
+        home_root -> home_device;
+        home_root -> home_cta;
+        home_root -> home_pending;
+        home_root -> home_list;
+        home_device -> scan_sheet [style=dashed, label="Scan CTA"];
+        home_cta -> mode_sheet [style=dashed, label="Long-press"];
+    }
+
+    // LiveScreen
+    subgraph cluster_live {
+        label="LiveScreen (Active Recording Route)";
+        fontcolor="#475569";
+        color="#cbd5e1";
+        style="rounded";
+        bgcolor="#f1f5f9";
+
+        live_root [label="LiveScreen (LiveScreen.isActive)\nPopScope(canPop: false)\nBack Dialog: Stay / Minimize / Finish", fillcolor="#fee2e2", color="#b91c1c", fontcolor="#991b1b"];
+        live_header [label="Timer + Audio Health Pill\ndurationStream • audioHealthStream\nwarningStream (FGS / BLE / Stall)", fillcolor="#ffffff"];
+        live_transcript [label="Auto-Scrolling Transcript\nStreamBuilder: transcriptStream\n(SingleChildScrollView)", fillcolor="#ffffff"];
+        live_stop [label="Finish Recording & Diarize\nNon-blocking stop -> pop to Home\n(WAV queued in background)", fillcolor="#fee2e2", color="#b91c1c", fontcolor="#991b1b"];
+
+        live_root -> live_header;
+        live_root -> live_transcript;
+        live_root -> live_stop;
+    }
+
+    // SessionDetailScreen
+    subgraph cluster_detail {
+        label="SessionDetailScreen (Review & Playback)";
+        fontcolor="#475569";
+        color="#cbd5e1";
+        style="rounded";
+        bgcolor="#f1f5f9";
+
+        detail_root [label="SessionDetailScreen\nAppBar (Copy • Delete Dialog)\nsessionsStream + 4s Processing Poll", fillcolor="#ffffff", color="#1d4ed8"];
+        detail_audio [label="16kHz WAV Player (just_audio)\nplayerStateStream • durationStream\npositionStream (Tap-to-Seek)", fillcolor="#dbeafe", color="#1d4ed8", fontcolor="#1e3a8a"];
+        detail_summary [label="AI Summary Card\n(Gemini 4 Hydrogen / 3.8 Flash)\n+ Diarizing / Retry Upload Banner", fillcolor="#ede9fe", color="#6d28d9", fontcolor="#5b21b6"];
+        detail_turns [label="Transcript View Switcher\nSegmentedButton (when Smart present)\n• Smart Transcript (SelectableText)\n• Diarized Turns (6 Lustrous Badges)", fillcolor="#d1fae5", color="#047857", fontcolor="#065f46"];
+
+        detail_root -> detail_audio;
+        detail_root -> detail_summary;
+        detail_root -> detail_turns;
+    }
+
+    // SettingsScreen & LoginScreen
+    subgraph cluster_settings {
+        label="SettingsScreen & LoginScreen";
+        fontcolor="#475569";
+        color="#cbd5e1";
+        style="rounded";
+        bgcolor="#f1f5f9";
+
+        settings_root [label="SettingsScreen\n• Google Account & Cloud Run URL\n• Summary Model Dropdown (4 Hydrogen / 3.8)\n• Lustrous Light / Auto / Dark SegmentedButton\n• Battery Exemption & Omi Button Control", fillcolor="#ccfbf1", color="#0f766e", fontcolor="#134e4a"];
+        login_root [label="LoginScreen\nGoogle Sign-In Flow\n(AuthService.signInWithGoogle)", fillcolor="#fef3c7", color="#b45309", fontcolor="#92400e"];
+
+        settings_root -> login_root [label="Sign In"];
+    }
+
+    // Singleton Reactive Services
+    subgraph cluster_services {
+        label="Reactive Singleton Services (Zero External State Framework)";
+        fontcolor="#475569";
+        color="#cbd5e1";
+        style="dashed,rounded";
+        bgcolor="#ffffff";
+
+        svc_session [label="SessionManager\nrecordingState • duration • transcript\naudioHealth • sessions • pendingUploads", fillcolor="#d1fae5", color="#047857", fontcolor="#065f46"];
+        svc_ble [label="BleService\ndeviceStream • reconnectingStream\nbuttonEventStream • playHaptic()", fillcolor="#dbeafe", color="#1d4ed8", fontcolor="#1e3a8a"];
+        svc_settings [label="SettingsService\nthemeModeNotifier • liveModeNotifier\nsummaryModel • hardwareButtonEnabled", fillcolor="#ede9fe", color="#6d28d9", fontcolor="#5b21b6"];
+    }
+
+    // Navigation & Reactive Edges
+    mat_app -> home_root [label="home:"];
+    home_cta -> live_root [label="Start / Return", color="#b91c1c"];
+    home_list -> detail_root [label="Tap Session", color="#047857"];
+    home_root -> settings_root [label="Settings Icon", color="#0f766e"];
+    live_stop -> detail_root [style=dashed, label="Open SnackBar / 0-Audio"];
+
+    svc_session -> home_root [style=dotted, color="#047857"];
+    svc_session -> live_root [style=dotted, color="#047857"];
+    svc_session -> detail_root [style=dotted, color="#047857"];
+    svc_ble -> home_device [style=dotted, color="#1d4ed8"];
+    svc_ble -> settings_root [style=dotted, color="#1d4ed8"];
+    svc_settings -> omi_app [style=dotted, color="#6d28d9"];
+}
