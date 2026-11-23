@@ -21,12 +21,14 @@ class SettingsService {
   ];
 
   final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier<ThemeMode>(ThemeMode.system);
+  final ValueNotifier<String> liveModeNotifier = ValueNotifier<String>('verbatim');
 
   SharedPreferences? _prefs;
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
     themeModeNotifier.value = _parseThemeMode(themeModePreference);
+    liveModeNotifier.value = liveTranscriptionMode;
   }
 
   static ThemeMode _parseThemeMode(String pref) {
@@ -82,7 +84,11 @@ class SettingsService {
   set preferredLanguage(String value) => _prefs?.setString(_keyLanguage, value.trim());
 
   String get liveTranscriptionMode => _prefs?.getString(_keyLiveTranscriptionMode) ?? 'verbatim';
-  set liveTranscriptionMode(String value) => _prefs?.setString(_keyLiveTranscriptionMode, value.trim().toLowerCase());
+  set liveTranscriptionMode(String value) {
+    final normalized = value.trim().toLowerCase() == 'smart' ? 'smart' : 'verbatim';
+    _prefs?.setString(_keyLiveTranscriptionMode, normalized);
+    liveModeNotifier.value = normalized;
+  }
 
   bool get generateSummary => _prefs?.getBool(_keyGenerateSummary) ?? true;
   set generateSummary(bool value) => _prefs?.setBool(_keyGenerateSummary, value);

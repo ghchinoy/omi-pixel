@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../models/device.dart';
@@ -7,6 +8,7 @@ import '../models/session.dart';
 import '../services/ble_service.dart';
 import '../services/recording_file_store.dart';
 import '../services/session_manager.dart';
+import '../services/settings_service.dart';
 import '../theme/lustrous_theme.dart';
 import 'live_screen.dart';
 import 'session_detail_screen.dart';
@@ -347,6 +349,135 @@ class _HomeScreenState extends State<HomeScreen> {
     return '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
   }
 
+  void _showLiveModePicker() {
+    HapticFeedback.mediumImpact();
+    final currentMode = SettingsService.instance.liveTranscriptionMode;
+
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Live Transcription Mode',
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Choose how Gemini 3.5 Transcribe Live formats real-time speech.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildLiveModeOption(
+                  ctx: ctx,
+                  value: 'verbatim',
+                  selected: currentMode == 'verbatim',
+                  icon: Icons.record_voice_over,
+                  title: 'Verbatim',
+                  subtitle: 'Exact word-for-word live transcription including filler words.',
+                ),
+                const SizedBox(height: 10),
+                _buildLiveModeOption(
+                  ctx: ctx,
+                  value: 'smart',
+                  selected: currentMode == 'smart',
+                  icon: Icons.auto_fix_high,
+                  title: 'Smart (Inline Self-Corrections)',
+                  subtitle: 'Removes disfluencies and applies verbal self-corrections inline during live speech.',
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLiveModeOption({
+    required BuildContext ctx,
+    required String value,
+    required bool selected,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    final theme = Theme.of(ctx);
+    return Card(
+      color: selected ? theme.colorScheme.primaryContainer.withValues(alpha: 0.45) : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: selected ? theme.colorScheme.primary : theme.colorScheme.outlineVariant,
+          width: selected ? 1.5 : 1.0,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          SettingsService.instance.liveTranscriptionMode = value;
+          Navigator.pop(ctx);
+          final messenger = ScaffoldMessenger.of(context);
+          messenger.clearSnackBars();
+          messenger.showSnackBar(
+            SnackBar(
+              persist: false,
+              content: Text(
+                value == 'smart'
+                    ? 'Live mode: Smart (inline self-corrections enabled)'
+                    : 'Live mode: Verbatim',
+              ),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(14.0),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                color: selected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (selected)
+                Icon(Icons.check_circle, color: theme.colorScheme.primary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _openActiveLiveScreen() {
     Navigator.push(
       context,
@@ -438,22 +569,52 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
 
-        return SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: FilledButton.icon(
-            style: FilledButton.styleFrom(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            onPressed: _handleStartRecording,
-            icon: const Icon(Icons.mic, size: 22),
-            label: const Text(
-              'Start Conversation',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ),
+        return ValueListenableBuilder<String>(
+          valueListenable: SettingsService.instance.liveModeNotifier,
+          builder: (context, liveMode, _) {
+            final modeLabel = liveMode == 'smart' ? 'Smart (Self-Corrections)' : 'Verbatim';
+            return Column(
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    onPressed: _handleStartRecording,
+                    onLongPress: _showLiveModePicker,
+                    icon: const Icon(Icons.mic, size: 22),
+                    label: const Text(
+                      'Start Conversation',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      liveMode == 'smart' ? Icons.auto_fix_high : Icons.record_voice_over,
+                      size: 13,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Mode: $modeLabel • Long-press button to switch',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
         );
       },
     );

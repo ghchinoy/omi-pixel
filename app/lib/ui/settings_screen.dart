@@ -360,7 +360,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             initialValue: _selectedLiveMode,
             decoration: const InputDecoration(
               labelText: 'Live Transcription Mode',
-              helperText: 'Smart mode removes filler words and disfluencies (Live streaming only)',
+              helperText: 'Smart mode removes disfluencies and applies inline verbal self-corrections (or long-press Start Conversation)',
               border: OutlineInputBorder(),
               prefixIcon: Icon(Icons.tune),
             ),
@@ -371,7 +371,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               DropdownMenuItem(
                 value: 'smart',
-                child: Text('Smart (Cleaned disfluencies & grammar)'),
+                child: Text('Smart (Inline self-corrections & cleaned disfluencies)'),
               ),
             ],
             onChanged: (val) {

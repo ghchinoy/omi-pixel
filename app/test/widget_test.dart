@@ -347,6 +347,35 @@ void main() {
       expect(find.text('Start Conversation'), findsNothing);
     });
 
+    testWidgets('Long-pressing Start Conversation switches Verbatim to Smart mode', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.instance.init();
+      SessionManager.instance.setRecordingStateForTesting(false);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: LustrousTheme.light(),
+          home: const HomeScreen(),
+        ),
+      );
+      await tester.pump();
+
+      expect(SettingsService.instance.liveTranscriptionMode, 'verbatim');
+      expect(find.textContaining('Mode: Verbatim'), findsOneWidget);
+
+      await tester.longPress(find.text('Start Conversation'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Live Transcription Mode'), findsOneWidget);
+      expect(find.text('Smart (Inline Self-Corrections)'), findsOneWidget);
+
+      await tester.tap(find.text('Smart (Inline Self-Corrections)'));
+      await tester.pumpAndSettle();
+
+      expect(SettingsService.instance.liveTranscriptionMode, 'smart');
+      expect(find.textContaining('Mode: Smart (Self-Corrections)'), findsOneWidget);
+    });
+
     test('finalizeStoppedSession with 0 audio and live transcript saves completed segments to backend', () async {
       SharedPreferences.setMockInitialValues({});
       String? savedStatus;
