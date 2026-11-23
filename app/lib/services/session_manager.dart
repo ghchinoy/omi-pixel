@@ -97,6 +97,17 @@ class SessionManager {
   final _pendingUploadsController = StreamController<List<PendingAudioUpload>>.broadcast();
   Stream<List<PendingAudioUpload>> get pendingUploadsStream => _pendingUploadsController.stream;
 
+  final _diarizingSessionsController = StreamController<Set<String>>.broadcast();
+  Stream<Set<String>> get diarizingSessionsStream => _diarizingSessionsController.stream;
+
+  final _diarizationCompletedController = StreamController<Session>.broadcast();
+  Stream<Session> get diarizationCompletedStream => _diarizationCompletedController.stream;
+
+  final Set<String> _activeDiarizingSessions = {};
+  Set<String> get activeDiarizingSessions => Set.unmodifiable(_activeDiarizingSessions);
+
+  bool isDiarizing(String sessionId) => _activeDiarizingSessions.contains(sessionId);
+
   List<PendingAudioUpload> _pendingUploads = [];
   List<PendingAudioUpload> get pendingUploads => List.unmodifiable(_pendingUploads);
 
@@ -248,6 +259,24 @@ class SessionManager {
       _warningController.add(msg);
       return false;
     }
+  }
+
+  Future<void> _updateForegroundNotificationForDiarization() async {
+    try {
+      if (await FlutterForegroundTask.isRunningService) {
+        await FlutterForegroundTask.updateService(
+          notificationTitle: 'Omi Diarizing in Background',
+          notificationText: 'Uploading & processing conversation audio...',
+        );
+      }
+    } catch (e) {
+      debugPrint('[SessionManager] Error updating foreground notification: $e');
+    }
+  }
+
+  Future<void> _stopForegroundServiceIfIdle() async {
+    if (_isRecording || _activeDiarizingSessions.isNotEmpty) return;
+    await _stopForegroundRecordingService();
   }
 
   Future<void> _stopForegroundRecordingService() async {
@@ -446,14 +475,15 @@ class SessionManager {
     _geminiTranscriptSub = null;
     await _geminiLive.disconnect();
 
-    await _stopForegroundRecordingService();
-
-    if (_activeSession == null) return null;
+    if (_activeSession == null) {
+      await _stopForegroundServiceIfIdle();
+      return null;
+    }
 
     final finishTime = DateTime.now();
     final durationSec = _elapsedSeconds.toDouble();
 
-    // Finalize disk-streamed PCM file into a durable local WAV file
+    // Finalize disk-streamed PCM file into a durable local WAV file (<100ms)
     final wavFile = await _fileStore.finalizeActiveToWav(_activeSession!.id);
 
     final updatedSession = await finalizeStoppedSession(
@@ -462,6 +492,7 @@ class SessionManager {
       liveTranscript: _liveTranscriptBuffer.toString(),
       finishTime: finishTime,
       durationSec: durationSec,
+      awaitUpload: false,
     );
 
     _activeSession = null;
@@ -472,13 +503,20 @@ class SessionManager {
     _stalledWarningEmitted = false;
     _liveTranscriptBuffer.clear();
 
+    if (_activeDiarizingSessions.isNotEmpty) {
+      await _updateForegroundNotificationForDiarization();
+    } else {
+      await _stopForegroundServiceIfIdle();
+    }
+
     return updatedSession;
   }
 
   /// Finalizes a stopped session locally and on the backend.
   ///
-  /// Persists the WAV file in the pending upload queue until `POST /api/sessions/{id}/audio`
-  /// succeeds (HTTP 200), keeping audio safely on disk for retry on failure.
+  /// When [awaitUpload] is `false` (default for interactive stop), the finalized
+  /// WAV is durably queued and uploaded/diarized asynchronously in the background
+  /// so callers return immediately without blocking UI navigation.
   /// Handles 0-audio recordings cleanly so Firestore never remains stuck in `status='recording'`.
   @visibleForTesting
   Future<Session> finalizeStoppedSession({
@@ -488,6 +526,7 @@ class SessionManager {
     required String liveTranscript,
     required DateTime finishTime,
     required double durationSec,
+    bool awaitUpload = true,
     bool? apiConfigured,
     Future<AudioUploadResult> Function(String sessionId, File wavFile)? uploadAudioFile,
     Future<Session?> Function(String sessionId, Uint8List wavBytes)? uploadAudio,
@@ -525,14 +564,26 @@ class SessionManager {
       _pendingUploadsController.add(_pendingUploads);
 
       if (isConfigured) {
-        final result = await _uploadQueuedItem(
+        if (awaitUpload) {
+          final result = await _uploadQueuedItem(
+            updatedSession.id,
+            wavFile,
+            doUploadFile: doUploadFile,
+          );
+          if (result.session != null) {
+            return result.session!;
+          }
+          return updatedSession;
+        }
+
+        // Non-blocking background upload & diarization
+        _activeDiarizingSessions.add(updatedSession.id);
+        _diarizingSessionsController.add(Set.unmodifiable(_activeDiarizingSessions));
+        unawaited(_runBackgroundUpload(
           updatedSession.id,
           wavFile,
           doUploadFile: doUploadFile,
-        );
-        if (result.session != null) {
-          return result.session!;
-        }
+        ));
         return updatedSession;
       }
       const msg = 'Cloud Run URL not configured. Recording saved on device for later upload.';
@@ -604,6 +655,27 @@ class SessionManager {
       );
     }
     return updatedSession;
+  }
+
+  Future<void> _runBackgroundUpload(
+    String sessionId,
+    File wavFile, {
+    required Future<AudioUploadResult> Function(String sessionId, File wavFile) doUploadFile,
+  }) async {
+    try {
+      final result = await _uploadQueuedItem(
+        sessionId,
+        wavFile,
+        doUploadFile: doUploadFile,
+      );
+      if (result.isSuccess && result.session != null) {
+        _diarizationCompletedController.add(result.session!);
+      }
+    } finally {
+      _activeDiarizingSessions.remove(sessionId);
+      _diarizingSessionsController.add(Set.unmodifiable(_activeDiarizingSessions));
+      await _stopForegroundServiceIfIdle();
+    }
   }
 
   Future<AudioUploadResult> _uploadQueuedItem(

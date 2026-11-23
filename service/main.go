@@ -155,6 +155,7 @@ func main() {
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
+	server.WaitForBackgroundJobs()
 
 	log.Println("Server exited gracefully.")
 }

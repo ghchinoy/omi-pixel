@@ -20,12 +20,38 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _retryingUploads = false;
+  StreamSubscription<Session>? _diarizationDoneSub;
 
   @override
   void initState() {
     super.initState();
     SessionManager.instance.refreshSessions();
     BleService.instance.tryReconnectLastDevice();
+    _diarizationDoneSub = SessionManager.instance.diarizationCompletedStream.listen((session) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Diarization ready: ${session.title}'),
+          action: SnackBarAction(
+            label: 'View',
+            onPressed: () {
+              if (!mounted) return;
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => SessionDetailScreen(session: session)),
+              );
+            },
+          ),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _diarizationDoneSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _handleRetryPendingUploads() async {
@@ -147,40 +173,46 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 8),
 
             // Sessions Stream List
-            StreamBuilder<List<Session>>(
-              stream: SessionManager.instance.sessionsStream,
-              initialData: SessionManager.instance.cachedSessions,
-              builder: (context, snapshot) {
-                final sessions = snapshot.data ?? [];
+            StreamBuilder<Set<String>>(
+              stream: SessionManager.instance.diarizingSessionsStream,
+              initialData: SessionManager.instance.activeDiarizingSessions,
+              builder: (context, _) {
+                return StreamBuilder<List<Session>>(
+                  stream: SessionManager.instance.sessionsStream,
+                  initialData: SessionManager.instance.cachedSessions,
+                  builder: (context, snapshot) {
+                    final sessions = snapshot.data ?? [];
 
-                if (sessions.isEmpty) {
-                  return Container(
-                    padding: const EdgeInsets.all(32.0),
-                    alignment: Alignment.center,
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.speaker_notes_off,
-                          size: 48,
-                          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                    if (sessions.isEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.all(32.0),
+                        alignment: Alignment.center,
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.speaker_notes_off,
+                              size: 48,
+                              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No conversations recorded yet.',
+                              style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Tap "Start Conversation" to record and diarize.',
+                              style: TextStyle(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7), fontSize: 13),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'No conversations recorded yet.',
-                          style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Tap "Start Conversation" to record and diarize.',
-                          style: TextStyle(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7), fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  );
-                }
+                      );
+                    }
 
-                return Column(
-                  children: sessions.map((s) => _buildSessionCard(context, s)).toList(),
+                    return Column(
+                      children: sessions.map((s) => _buildSessionCard(context, s)).toList(),
+                    );
+                  },
                 );
               },
             ),
@@ -419,71 +451,80 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildPendingUploadsCard(BuildContext context) {
     final theme = Theme.of(context);
-    return StreamBuilder<List<PendingAudioUpload>>(
-      stream: SessionManager.instance.pendingUploadsStream,
-      initialData: SessionManager.instance.pendingUploads,
-      builder: (context, snapshot) {
-        final pending = snapshot.data ?? const [];
-        if (pending.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        final lastErr = pending.first.lastError;
-        return Padding(
-          padding: const EdgeInsets.only(top: 16.0),
-          child: Card(
-            color: Colors.amber.withValues(alpha: 0.12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-              side: BorderSide(color: Colors.amber.withValues(alpha: 0.5)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(14.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+    return StreamBuilder<Set<String>>(
+      stream: SessionManager.instance.diarizingSessionsStream,
+      initialData: SessionManager.instance.activeDiarizingSessions,
+      builder: (context, diarizingSnap) {
+        final activeIds = diarizingSnap.data ?? const <String>{};
+        return StreamBuilder<List<PendingAudioUpload>>(
+          stream: SessionManager.instance.pendingUploadsStream,
+          initialData: SessionManager.instance.pendingUploads,
+          builder: (context, snapshot) {
+            final pending = (snapshot.data ?? const [])
+                .where((u) => !activeIds.contains(u.sessionId))
+                .toList();
+            if (pending.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            final lastErr = pending.first.lastError;
+            return Padding(
+              padding: const EdgeInsets.only(top: 16.0),
+              child: Card(
+                color: Colors.amber.withValues(alpha: 0.12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: BorderSide(color: Colors.amber.withValues(alpha: 0.5)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(14.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.cloud_upload_outlined, color: Colors.amber, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '${pending.length} recording${pending.length == 1 ? '' : 's'} saved on device (upload pending)',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            color: Colors.amber.shade200,
-                            fontWeight: FontWeight.bold,
+                      Row(
+                        children: [
+                          const Icon(Icons.cloud_upload_outlined, color: Colors.amber, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${pending.length} recording${pending.length == 1 ? '' : 's'} saved on device (upload pending)',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                color: Colors.amber.shade200,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
+                        ],
+                      ),
+                      if (lastErr != null && lastErr.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          lastErr,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton.tonalIcon(
+                          onPressed: _retryingUploads ? null : _handleRetryPendingUploads,
+                          icon: _retryingUploads
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.refresh, size: 16),
+                          label: Text(_retryingUploads ? 'Uploading...' : 'Retry Upload'),
                         ),
                       ),
                     ],
                   ),
-                  if (lastErr != null && lastErr.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      lastErr,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                    ),
-                  ],
-                  const SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton.tonalIcon(
-                      onPressed: _retryingUploads ? null : _handleRetryPendingUploads,
-                      icon: _retryingUploads
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.refresh, size: 16),
-                      label: Text(_retryingUploads ? 'Uploading...' : 'Retry Upload'),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
@@ -492,14 +533,18 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSessionCard(BuildContext context, Session session) {
     final theme = Theme.of(context);
     final dateFormat = DateFormat('MMM dd, HH:mm');
-    final hasPendingAudio = SessionManager.instance.hasPendingUpload(session.id);
+    final isActivelyDiarizing = SessionManager.instance.isDiarizing(session.id);
+    final hasPendingAudio = !isActivelyDiarizing && SessionManager.instance.hasPendingUpload(session.id);
 
     Color statusColor = Colors.grey;
     if (session.status == SessionStatus.completed) statusColor = Colors.green;
     if (session.status == SessionStatus.processing || hasPendingAudio) statusColor = Colors.amber;
+    if (isActivelyDiarizing) statusColor = theme.colorScheme.primary;
     if (session.status == SessionStatus.failed) statusColor = Colors.red;
 
-    final statusLabel = hasPendingAudio ? 'UPLOAD PENDING' : session.status.name.toUpperCase();
+    final statusLabel = isActivelyDiarizing
+        ? 'DIARIZING'
+        : (hasPendingAudio ? 'UPLOAD PENDING' : session.status.name.toUpperCase());
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10.0),
@@ -539,9 +584,25 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: statusColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: Text(
-                      statusLabel,
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isActivelyDiarizing || session.status == SessionStatus.processing) ...[
+                          SizedBox(
+                            width: 10,
+                            height: 10,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5,
+                              color: statusColor,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                        ],
+                        Text(
+                          statusLabel,
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor),
+                        ),
+                      ],
                     ),
                   ),
                 ],

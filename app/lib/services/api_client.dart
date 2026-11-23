@@ -144,7 +144,7 @@ class ApiClient {
         resp = await attempt(forceRefresh: true);
       }
 
-      if (resp.statusCode == 200) {
+      if (resp.statusCode == 200 || resp.statusCode == 202) {
         final session = Session.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
         return AudioUploadResult(session: session, statusCode: resp.statusCode);
       }
@@ -232,6 +232,35 @@ class ApiClient {
     } catch (e) {
       debugPrint('[ApiClient] saveSegments error: $e');
       return false;
+    }
+  }
+
+  /// Requests backend reprocessing of an already-stored session WAV in GCS.
+  Future<AudioUploadResult> reprocessSession(String sessionId, {bool? summary}) async {
+    if (!isConfigured) {
+      return const AudioUploadResult(error: 'Cloud Run URL is not configured.');
+    }
+    final shouldSummarize = summary ?? SettingsService.instance.generateSummary;
+    try {
+      final url = Uri.parse('$_baseUrl/api/sessions/$sessionId/reprocess?summary=$shouldSummarize');
+      var headers = await _authHeaders();
+      var resp = await http.post(url, headers: headers).timeout(const Duration(minutes: 3));
+      if (resp.statusCode == 401) {
+        headers = await _authHeaders(null, true);
+        resp = await http.post(url, headers: headers).timeout(const Duration(minutes: 3));
+      }
+      if (resp.statusCode == 200 || resp.statusCode == 202) {
+        return AudioUploadResult(
+          session: Session.fromJson(jsonDecode(resp.body) as Map<String, dynamic>),
+          statusCode: resp.statusCode,
+        );
+      }
+      return AudioUploadResult(
+        statusCode: resp.statusCode,
+        error: 'Reprocess failed (HTTP ${resp.statusCode})',
+      );
+    } catch (e) {
+      return AudioUploadResult(error: 'Reprocess error: $e');
     }
   }
 }

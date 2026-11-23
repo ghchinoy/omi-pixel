@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -498,6 +499,68 @@ void main() {
       expect(result.session?.title, 'Recovered After 401');
       expect(attemptCount, 2);
       expect(forceRefreshCalls, [false, true]);
+    });
+
+    test('finalizeStoppedSession(awaitUpload: false) returns immediately and completes diarization in background', () async {
+      SharedPreferences.setMockInitialValues({});
+      final tempDir = await Directory.systemTemp.createTemp('omi_pixel_async_test_');
+      addTearDown(() => tempDir.delete(recursive: true));
+
+      final store = RecordingFileStore(baseDirProvider: () async => tempDir);
+      SessionManager.instance.setFileStoreForTesting(store);
+
+      await store.startPcmStream('sess_bg_1');
+      store.appendPcmChunk(Uint8List(2048));
+      final wavFile = await store.finalizeActiveToWav('sess_bg_1');
+      expect(wavFile, isNotNull);
+
+      final uploadCompleter = Completer<AudioUploadResult>();
+      final completedSessions = <Session>[];
+      final sub = SessionManager.instance.diarizationCompletedStream.listen(completedSessions.add);
+      addTearDown(sub.cancel);
+
+      final baseSession = Session(
+        id: 'sess_bg_1',
+        deviceId: 'omi_1',
+        title: 'Async Test',
+        status: SessionStatus.recording,
+        startedAt: DateTime.now(),
+        createdAt: DateTime.now(),
+      );
+
+      // Returns immediately without waiting for uploadCompleter
+      final immediateResult = await SessionManager.instance.finalizeStoppedSession(
+        session: baseSession,
+        wavFile: wavFile,
+        liveTranscript: '',
+        finishTime: DateTime.now(),
+        durationSec: 15.0,
+        awaitUpload: false,
+        apiConfigured: true,
+        uploadAudioFile: (id, file) => uploadCompleter.future,
+      );
+
+      expect(immediateResult.status, SessionStatus.processing);
+      expect(SessionManager.instance.isDiarizing('sess_bg_1'), isTrue);
+      expect(await wavFile!.exists(), isTrue);
+
+      // Now complete background diarization
+      uploadCompleter.complete(
+        AudioUploadResult(
+          statusCode: 200,
+          session: baseSession.copyWith(
+            status: SessionStatus.completed,
+            title: 'Background Diarized Session',
+          ),
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(SessionManager.instance.isDiarizing('sess_bg_1'), isFalse);
+      expect(SessionManager.instance.hasPendingUpload('sess_bg_1'), isFalse);
+      expect(await wavFile.exists(), isFalse);
+      expect(completedSessions, hasLength(1));
+      expect(completedSessions.first.title, 'Background Diarized Session');
     });
   });
 }

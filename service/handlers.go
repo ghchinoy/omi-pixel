@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"omi-pixel-service/web"
@@ -33,6 +35,12 @@ type Server struct {
 	auth       *Authenticator
 	spaTmpl    *template.Template
 	webConfig  web.WebConfig
+	bgWg       sync.WaitGroup
+}
+
+// WaitForBackgroundJobs blocks until any in-flight async diarization jobs finish.
+func (s *Server) WaitForBackgroundJobs() {
+	s.bgWg.Wait()
 }
 
 func NewServer(store Store, audioStore AudioStore, gemini *GeminiClient, liveProxy *LiveProxy, auth *Authenticator, spaTmpl *template.Template, webConfig web.WebConfig) *Server {
@@ -65,6 +73,7 @@ func (s *Server) Routes() http.Handler {
 	apiMux.HandleFunc("GET /api/sessions/{id}", s.handleGetSession)
 	apiMux.HandleFunc("POST /api/sessions/{id}/audio", s.handleUploadAudio)
 	apiMux.HandleFunc("GET /api/sessions/{id}/audio", s.handleDownloadAudio)
+	apiMux.HandleFunc("POST /api/sessions/{id}/reprocess", s.handleReprocessSession)
 	apiMux.HandleFunc("POST /api/sessions/{id}/segments", s.handleSaveSegments)
 	apiMux.HandleFunc("GET /api/live", s.handleLiveWS)
 
@@ -256,24 +265,70 @@ func (s *Server) handleUploadAudio(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[handleUploadAudio] Audio store upload failed (%v), falling back to inline audio", err)
 		} else if uri != "" {
 			session.AudioURL = uri
+			session.HasAudio = true
 			if strings.HasPrefix(uri, "gs://") {
 				gcsURI = uri
 			}
 		}
 	}
 
-	// 5. Perform Gemini 3.5 Transcribe structured diarization & AI title/summary
-	log.Printf("Running Gemini 3.5 diarization for session %s (gcs=%s, bytes=%d, summary=%v)...", id, gcsURI, len(audioBytes), generateSummary)
-	diarized, err := s.gemini.DiarizeAudio(ctx, audioBytes, gcsURI, session.Language, generateSummary)
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		log.Printf("[handleUploadAudio] Failed to persist processing session %s: %v", id, err)
+	}
+
+	asyncMode := r.URL.Query().Get("async") == "true" || r.URL.Query().Get("async") == "1"
+	if asyncMode {
+		sessionCopy := *session
+		audioCopy := append([]byte(nil), audioBytes...)
+		s.bgWg.Add(1)
+		go func() {
+			defer s.bgWg.Done()
+			bgCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Minute)
+			defer cancel()
+			if _, err := s.runDiarizationAndPersist(bgCtx, &sessionCopy, audioCopy, gcsURI, generateSummary); err != nil {
+				log.Printf("[handleUploadAudio] Async diarization failed for session %s: %v", sessionCopy.ID, err)
+			}
+		}()
+
+		respondJSON(w, http.StatusAccepted, &SessionDetail{
+			Session:  *session,
+			Segments: []Segment{},
+		})
+		return
+	}
+
+	// 5. Perform synchronous Gemini 3.5 Transcribe structured diarization & AI title/summary
+	detail, err := s.runDiarizationAndPersist(ctx, session, audioBytes, gcsURI, generateSummary)
 	if err != nil {
-		log.Printf("Gemini diarization failed for session %s: %v", id, err)
-		session.Status = StatusFailed
-		_ = s.store.SaveSession(ctx, session)
 		http.Error(w, fmt.Sprintf("diarization failed: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// 4. Update session metadata and save segments
+	respondJSON(w, http.StatusOK, detail)
+}
+
+func (s *Server) runDiarizationAndPersist(
+	ctx context.Context,
+	session *Session,
+	audioBytes []byte,
+	gcsURI string,
+	generateSummary bool,
+) (*SessionDetail, error) {
+	if s.gemini == nil {
+		session.Status = StatusFailed
+		_ = s.store.SaveSession(ctx, session)
+		return nil, fmt.Errorf("gemini client is not configured")
+	}
+
+	log.Printf("Running Gemini 3.5 diarization for session %s (gcs=%s, bytes=%d, summary=%v)...", session.ID, gcsURI, len(audioBytes), generateSummary)
+	diarized, err := s.gemini.DiarizeAudio(ctx, audioBytes, gcsURI, session.Language, generateSummary)
+	if err != nil {
+		log.Printf("Gemini diarization failed for session %s: %v", session.ID, err)
+		session.Status = StatusFailed
+		_ = s.store.SaveSession(ctx, session)
+		return nil, err
+	}
+
 	now := time.Now().UTC()
 	session.Status = StatusCompleted
 	session.FinishedAt = &now
@@ -289,16 +344,82 @@ func (s *Server) handleUploadAudio(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.store.SaveSession(ctx, session); err != nil {
-		log.Printf("Failed to update session: %v", err)
+		log.Printf("Failed to update session %s: %v", session.ID, err)
 	}
 
-	if err := s.store.SaveSegments(ctx, id, diarized.Segments); err != nil {
-		log.Printf("Failed to save segments: %v", err)
+	if err := s.store.SaveSegments(ctx, session.ID, diarized.Segments); err != nil {
+		log.Printf("Failed to save segments for session %s: %v", session.ID, err)
 	}
 
-	detail := &SessionDetail{
+	return &SessionDetail{
 		Session:  *session,
 		Segments: diarized.Segments,
+	}, nil
+}
+
+func (s *Server) handleReprocessSession(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !isValidSessionID(id) {
+		http.Error(w, "missing or invalid session id", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	session, err := s.store.GetSession(ctx, id)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("session not found: %v", err), http.StatusNotFound)
+		return
+	}
+
+	reader, _, err := s.audioStore.DownloadWAV(ctx, id)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("stored audio not found for reprocessing: %v", err), http.StatusNotFound)
+		return
+	}
+	audioBytes, err := io.ReadAll(io.LimitReader(reader, maxAudioBodyBytes))
+	_ = reader.Close()
+	if err != nil || len(audioBytes) < 44 {
+		http.Error(w, "stored audio is invalid or unreadable", http.StatusInternalServerError)
+		return
+	}
+
+	generateSummary := true
+	if summaryParam := r.URL.Query().Get("summary"); summaryParam != "" {
+		generateSummary = (summaryParam == "true" || summaryParam == "1")
+	}
+
+	var gcsURI string
+	if strings.HasPrefix(session.AudioURL, "gs://") {
+		gcsURI = session.AudioURL
+	}
+
+	session.Status = StatusProcessing
+	_ = s.store.SaveSession(ctx, session)
+
+	asyncMode := r.URL.Query().Get("async") == "true" || r.URL.Query().Get("async") == "1"
+	if asyncMode {
+		sessionCopy := *session
+		s.bgWg.Add(1)
+		go func() {
+			defer s.bgWg.Done()
+			bgCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Minute)
+			defer cancel()
+			if _, err := s.runDiarizationAndPersist(bgCtx, &sessionCopy, audioBytes, gcsURI, generateSummary); err != nil {
+				log.Printf("[handleReprocessSession] Async reprocess failed for %s: %v", sessionCopy.ID, err)
+			}
+		}()
+
+		respondJSON(w, http.StatusAccepted, &SessionDetail{
+			Session:  *session,
+			Segments: []Segment{},
+		})
+		return
+	}
+
+	detail, err := s.runDiarizationAndPersist(ctx, session, audioBytes, gcsURI, generateSummary)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("reprocess diarization failed: %v", err), http.StatusInternalServerError)
+		return
 	}
 
 	respondJSON(w, http.StatusOK, detail)

@@ -31,20 +31,57 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   double _currentPositionSec = 0.0;
 
   StreamSubscription? _posSub;
+  StreamSubscription<List<Session>>? _sessionsSub;
+  Timer? _processingPollTimer;
 
   @override
   void initState() {
     super.initState();
     _session = widget.session;
+    _sessionsSub = SessionManager.instance.sessionsStream.listen((sessions) {
+      if (!mounted) return;
+      for (final s in sessions) {
+        if (s.id == _session.id) {
+          final hadNoAudio = !_session.hasAudio && _session.audioUrl.isEmpty;
+          setState(() => _session = s);
+          if (hadNoAudio && (s.hasAudio || s.audioUrl.isNotEmpty)) {
+            _initAudio();
+          }
+          if (s.status != SessionStatus.processing) {
+            _processingPollTimer?.cancel();
+            _processingPollTimer = null;
+          }
+          break;
+        }
+      }
+    });
     _fetchFullSessionDetail();
     _initAudio();
+    _startProcessingPollIfNeeded();
   }
 
-  Future<void> _fetchFullSessionDetail() async {
+  void _startProcessingPollIfNeeded() {
+    if (_session.status != SessionStatus.processing || !ApiClient.instance.isConfigured) {
+      _processingPollTimer?.cancel();
+      _processingPollTimer = null;
+      return;
+    }
+    _processingPollTimer?.cancel();
+    _processingPollTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
+      if (!mounted || _session.status != SessionStatus.processing) {
+        _processingPollTimer?.cancel();
+        _processingPollTimer = null;
+        return;
+      }
+      await _fetchFullSessionDetail(silent: true);
+    });
+  }
+
+  Future<void> _fetchFullSessionDetail({bool silent = false}) async {
     if (!ApiClient.instance.isConfigured) return;
 
     // If segments or summary are missing, fetch the full SessionDetail from backend
-    if (_session.segments.isEmpty || _session.summary.isEmpty || !_session.hasAudio) {
+    if (!silent && (_session.segments.isEmpty || _session.summary.isEmpty || !_session.hasAudio)) {
       setState(() {
         _detailLoading = true;
       });
@@ -63,6 +100,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         // If audio became available from detail fetch, initialize audio player
         if (hadNoAudio && (detailed.hasAudio || detailed.audioUrl.isNotEmpty)) {
           _initAudio();
+        }
+        if (detailed.status != SessionStatus.processing) {
+          _processingPollTimer?.cancel();
+          _processingPollTimer = null;
         }
       } else if (mounted) {
         setState(() {
@@ -122,6 +163,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
   @override
   void dispose() {
+    _processingPollTimer?.cancel();
+    _sessionsSub?.cancel();
     _posSub?.cancel();
     _audioPlayer.dispose();
     super.dispose();
@@ -262,69 +305,125 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             ),
           ),
 
-          // Pending Local Upload Banner (if WAV is queued on device)
-          StreamBuilder<List<PendingAudioUpload>>(
-            stream: SessionManager.instance.pendingUploadsStream,
-            initialData: SessionManager.instance.pendingUploads,
-            builder: (context, snapshot) {
-              final pendingItem = SessionManager.instance.pendingUploadFor(session.id);
-              if (pendingItem == null) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(top: 12.0),
-                child: Card(
-                  color: Colors.amber.withValues(alpha: 0.12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Colors.amber.withValues(alpha: 0.5)),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(14.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.cloud_upload_outlined, color: Colors.amber, size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Audio saved on device — upload pending',
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  color: Colors.amber.shade200,
-                                  fontWeight: FontWeight.bold,
+          // Pending Local Upload Banner (only when not actively diarizing right now)
+          StreamBuilder<Set<String>>(
+            stream: SessionManager.instance.diarizingSessionsStream,
+            initialData: SessionManager.instance.activeDiarizingSessions,
+            builder: (context, diarizingSnap) {
+              final isActivelyDiarizing = (diarizingSnap.data ?? const <String>{}).contains(session.id);
+              if (isActivelyDiarizing || session.status == SessionStatus.processing) {
+                return Padding(
+                  padding: const EdgeInsets.only(top: 12.0),
+                  child: Card(
+                    color: theme.colorScheme.primaryContainer.withValues(alpha: 0.25),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: theme.colorScheme.primary.withValues(alpha: 0.45)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14.0),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Diarizing in Background…',
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Gemini 3.5 Transcribe is separating speakers and summarizing. This view updates automatically.',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }
+              return StreamBuilder<List<PendingAudioUpload>>(
+                stream: SessionManager.instance.pendingUploadsStream,
+                initialData: SessionManager.instance.pendingUploads,
+                builder: (context, snapshot) {
+                  final pendingItem = SessionManager.instance.pendingUploadFor(session.id);
+                  if (pendingItem == null) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 12.0),
+                    child: Card(
+                      color: Colors.amber.withValues(alpha: 0.12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Colors.amber.withValues(alpha: 0.5)),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.cloud_upload_outlined, color: Colors.amber, size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Audio saved on device — upload pending',
+                                    style: theme.textTheme.titleSmall?.copyWith(
+                                      color: Colors.amber.shade200,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (pendingItem.lastError != null && pendingItem.lastError!.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                pendingItem.lastError!,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 10),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: FilledButton.tonalIcon(
+                                onPressed: _retryingUpload ? null : _retrySessionUpload,
+                                icon: _retryingUpload
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : const Icon(Icons.refresh, size: 16),
+                                label: Text(_retryingUpload ? 'Uploading...' : 'Retry Upload'),
                               ),
                             ),
                           ],
                         ),
-                        if (pendingItem.lastError != null && pendingItem.lastError!.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            pendingItem.lastError!,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 10),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: FilledButton.tonalIcon(
-                            onPressed: _retryingUpload ? null : _retrySessionUpload,
-                            icon: _retryingUpload
-                                ? const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                : const Icon(Icons.refresh, size: 16),
-                            label: Text(_retryingUpload ? 'Uploading...' : 'Retry Upload'),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               );
             },
           ),

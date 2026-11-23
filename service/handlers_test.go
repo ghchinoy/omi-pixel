@@ -275,3 +275,47 @@ func TestSaveSegments_FailedStatusOnZeroAudio(t *testing.T) {
 		t.Errorf("session.FinishedAt = nil, want non-nil timestamp")
 	}
 }
+
+func TestUploadAudio_AsyncAccepted(t *testing.T) {
+	ctx := t.Context()
+	store := NewMemoryStore()
+	audioStore := &NoopAudioStore{}
+	auth, err := NewAuthenticator(ctx, "test-proj", store, true)
+	if err != nil {
+		t.Fatalf("NewAuthenticator(test-proj, disabled=true) error = %v", err)
+	}
+	spaTmpl, err := web.ParseTemplates()
+	if err != nil {
+		t.Fatalf("web.ParseTemplates() error = %v", err)
+	}
+	server := NewServer(store, audioStore, nil, nil, auth, spaTmpl, web.DefaultWebConfig)
+	handler := server.Routes()
+
+	// Build minimal valid 44+ byte WAV payload
+	wav := make([]byte, 128)
+	copy(wav[0:4], "RIFF")
+	copy(wav[8:12], "WAVE")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/sessions/sess-async-1/audio?async=true", bytes.NewReader(wav))
+	req.Header.Set("Content-Type", "audio/wav")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("POST /api/sessions/sess-async-1/audio?async=true status = %d, want %d (body: %s)", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+
+	var detail SessionDetail
+	if err := json.NewDecoder(rec.Body).Decode(&detail); err != nil {
+		t.Fatalf("Decode(202 response) error = %v", err)
+	}
+	if detail.Status != StatusProcessing {
+		t.Errorf("202 response status = %q, want %q", detail.Status, StatusProcessing)
+	}
+	if !detail.HasAudio {
+		t.Errorf("202 response has_audio = false, want true")
+	}
+
+	// Ensure background goroutine exits cleanly before test ends
+	server.WaitForBackgroundJobs()
+}

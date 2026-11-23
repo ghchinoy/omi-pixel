@@ -412,7 +412,17 @@ const spaTemplate = `
     }
 
     // 4. Views Routing
+    let activePollTimer = null;
+
+    function clearPollTimer() {
+      if (activePollTimer) {
+        clearTimeout(activePollTimer);
+        activePollTimer = null;
+      }
+    }
+
     function navigate(path) {
+      clearPollTimer();
       window.history.pushState({}, "", path);
       routeView();
     }
@@ -420,6 +430,7 @@ const spaTemplate = `
     window.addEventListener("popstate", routeView);
 
     function routeView() {
+      clearPollTimer();
       if (!currentUser) return;
       const path = window.location.pathname;
       if (path.indexOf("/sessions/") === 0) {
@@ -470,6 +481,16 @@ const spaTemplate = `
             '</div>';
         }
         main.innerHTML = html;
+
+        // Auto-refresh list while any session is still diarizing in the background
+        if (sessions.some(function(item) { return item.status === "processing"; })) {
+          clearPollTimer();
+          activePollTimer = setTimeout(function() {
+            if (window.location.pathname === "/") {
+              renderSessionList();
+            }
+          }, 8000);
+        }
       } catch (e) {
         if (e.message === "ACCESS_DENIED") {
           renderAccessDenied();
@@ -517,6 +538,21 @@ const spaTemplate = `
           '<audio id="session-audio-player" controls preload="metadata"></audio>' +
           '</div>';
 
+        if (s.status === "processing") {
+          html += '<div class="summary-box" style="border-left-color:var(--warning); background:rgba(234,179,8,0.08); display:flex; align-items:center; gap:0.75rem;">' +
+            '<div class="loading-spinner"></div>' +
+            '<div>' +
+            '<strong>Diarizing in Background…</strong>' +
+            '<p style="margin-top:0.25rem; color:var(--text-muted); font-size:0.9rem;">Gemini 3.5 Transcribe is separating speakers and generating a summary. This page refreshes automatically.</p>' +
+            '</div>' +
+            '</div>';
+        } else if (s.status === "failed" && s.has_audio) {
+          html += '<div class="summary-box" style="border-left-color:var(--danger); background:rgba(239,68,68,0.08); display:flex; justify-content:space-between; align-items:center; gap:1rem;">' +
+            '<div><strong>Diarization Failed</strong><p style="margin-top:0.25rem; color:var(--text-muted); font-size:0.9rem;">Audio is safely stored in Cloud Storage.</p></div>' +
+            '<button class="btn" onclick="reprocessSession(\'' + escapeHtml(sessionId) + '\')">Retry Diarization</button>' +
+            '</div>';
+        }
+
         if (s.summary) {
           html += '<div class="summary-box">' +
             '<strong>✨ Gemini 3.8 Flash Summary</strong>' +
@@ -527,7 +563,9 @@ const spaTemplate = `
         html += '<h3 style="margin-bottom: 1rem;">Diarized Transcript (' + segs.length + ' turns)</h3>';
 
         if (segs.length === 0) {
-          html += '<div class="empty-state"><p>No diarized segments available yet.</p></div>';
+          html += '<div class="empty-state"><p>' +
+            (s.status === "processing" ? 'Waiting for diarized speaker turns…' : 'No diarized segments available yet.') +
+            '</p></div>';
         } else {
           html += '<div id="transcript-turns">';
           const colors = ["#38bdf8", "#10b981", "#f59e0b", "#ec4899", "#8b5cf6", "#06b6d4"];
@@ -550,12 +588,34 @@ const spaTemplate = `
         // Load Audio Stream into Player with Auth Bearer
         loadAudioPlayer(sessionId);
 
+        // Auto-poll while session is processing
+        if (s.status === "processing") {
+          clearPollTimer();
+          activePollTimer = setTimeout(function() {
+            if (window.location.pathname === "/sessions/" + sessionId) {
+              renderSessionDetail(sessionId);
+            }
+          }, 5000);
+        }
+
       } catch (e) {
         if (e.message === "ACCESS_DENIED") {
           renderAccessDenied();
         } else {
           main.innerHTML = '<div class="empty-state" style="color:var(--danger);"><p>Failed to load conversation: ' + escapeHtml(e.message) + '</p></div>';
         }
+      }
+    }
+
+    async function reprocessSession(sessionId) {
+      try {
+        await fetch("/api/sessions/" + sessionId + "/reprocess?async=true", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + currentIdToken }
+        });
+        renderSessionDetail(sessionId);
+      } catch (e) {
+        console.error("Failed to trigger reprocess", e);
       }
     }
 

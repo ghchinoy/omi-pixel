@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import '../models/session.dart';
 import '../services/session_manager.dart';
 import 'session_detail_screen.dart';
 
@@ -139,19 +140,32 @@ class _LiveScreenState extends State<LiveScreen> with SingleTickerProviderStateM
       final session = await SessionManager.instance.stopRecording();
       if (!mounted) return;
 
-      if (session != null) {
-        if (SessionManager.instance.hasPendingUpload(session.id)) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                SessionManager.instance.lastUploadError ??
-                    'Audio saved on device and queued for retry.',
-              ),
-              backgroundColor: Colors.orange.shade800,
-              duration: const Duration(seconds: 6),
+      if (session != null && session.status == SessionStatus.processing) {
+        final messenger = ScaffoldMessenger.of(context);
+        final navigator = Navigator.of(context);
+        navigator.pop();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              SessionManager.instance.isDiarizing(session.id)
+                  ? 'Recording saved — diarizing in background...'
+                  : (SessionManager.instance.lastUploadError ??
+                      'Recording saved on device and queued for retry.'),
             ),
-          );
-        }
+            action: SnackBarAction(
+              label: 'Open',
+              onPressed: () {
+                navigator.push(
+                  MaterialPageRoute(
+                    builder: (_) => SessionDetailScreen(session: session),
+                  ),
+                );
+              },
+            ),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      } else if (session != null) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -164,7 +178,7 @@ class _LiveScreenState extends State<LiveScreen> with SingleTickerProviderStateM
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to process session: $e')),
+        SnackBar(content: Text('Failed to finish recording: $e')),
       );
       Navigator.pop(context);
     }
@@ -401,7 +415,7 @@ class _LiveScreenState extends State<LiveScreen> with SingleTickerProviderStateM
                           )
                         : const Icon(Icons.stop),
                     label: Text(
-                      _stopping ? 'Diarizing with Gemini 3.5...' : 'Finish Recording & Diarize',
+                      _stopping ? 'Saving Recording...' : 'Finish Recording & Diarize',
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ),
