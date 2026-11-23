@@ -8,6 +8,7 @@ import '../models/segment.dart';
 import '../models/session.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../services/recording_file_store.dart';
 import '../services/session_manager.dart';
 import '../services/settings_service.dart';
 
@@ -26,6 +27,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   bool _audioAvailable = false;
   bool _audioLoading = false;
   bool _detailLoading = false;
+  bool _retryingUpload = false;
   double _currentPositionSec = 0.0;
 
   StreamSubscription? _posSub;
@@ -162,6 +164,35 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     );
   }
 
+  Future<void> _retrySessionUpload() async {
+    if (_retryingUpload) return;
+    setState(() => _retryingUpload = true);
+    try {
+      final result = await SessionManager.instance.retryPendingUpload(_session.id);
+      if (!mounted) return;
+      if (result.isSuccess && result.session != null) {
+        setState(() {
+          _session = result.session!;
+        });
+        _initAudio();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Audio uploaded and diarized.')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.error ?? 'Upload retry failed.'),
+            backgroundColor: Colors.orange.shade800,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _retryingUpload = false);
+      }
+    }
+  }
+
   void _seekTo(double startSeconds) {
     if (_audioAvailable) {
       _audioPlayer.seek(Duration(milliseconds: (startSeconds * 1000).toInt()));
@@ -229,6 +260,73 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 ],
               ),
             ),
+          ),
+
+          // Pending Local Upload Banner (if WAV is queued on device)
+          StreamBuilder<List<PendingAudioUpload>>(
+            stream: SessionManager.instance.pendingUploadsStream,
+            initialData: SessionManager.instance.pendingUploads,
+            builder: (context, snapshot) {
+              final pendingItem = SessionManager.instance.pendingUploadFor(session.id);
+              if (pendingItem == null) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: 12.0),
+                child: Card(
+                  color: Colors.amber.withValues(alpha: 0.12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: Colors.amber.withValues(alpha: 0.5)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.cloud_upload_outlined, color: Colors.amber, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Audio saved on device — upload pending',
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  color: Colors.amber.shade200,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (pendingItem.lastError != null && pendingItem.lastError!.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            pendingItem.lastError!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: FilledButton.tonalIcon(
+                            onPressed: _retryingUpload ? null : _retrySessionUpload,
+                            icon: _retryingUpload
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.refresh, size: 16),
+                            label: Text(_retryingUpload ? 'Uploading...' : 'Retry Upload'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
 
           // Audio Playback Player Card

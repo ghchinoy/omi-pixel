@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/device.dart';
 import '../models/session.dart';
 import '../services/ble_service.dart';
+import '../services/recording_file_store.dart';
 import '../services/session_manager.dart';
 import 'live_screen.dart';
 import 'session_detail_screen.dart';
@@ -18,11 +19,36 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  bool _retryingUploads = false;
+
   @override
   void initState() {
     super.initState();
     SessionManager.instance.refreshSessions();
     BleService.instance.tryReconnectLastDevice();
+  }
+
+  Future<void> _handleRetryPendingUploads() async {
+    if (_retryingUploads) return;
+    setState(() => _retryingUploads = true);
+    try {
+      final count = await SessionManager.instance.retryAllPendingUploads();
+      if (!mounted) return;
+      final remaining = SessionManager.instance.pendingUploads.length;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            remaining == 0
+                ? 'Uploaded $count pending recording(s).'
+                : 'Uploaded $count; $remaining still pending (${SessionManager.instance.lastUploadError ?? "check connection"}).',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _retryingUploads = false);
+      }
+    }
   }
 
   void _showScanBottomSheet() {
@@ -97,6 +123,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
             // Start Recording CTA
             _buildRecordingCta(context),
+
+            // Pending On-Device Audio Uploads Banner
+            _buildPendingUploadsCard(context),
 
             const SizedBox(height: 24),
 
@@ -291,14 +320,89 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildPendingUploadsCard(BuildContext context) {
+    final theme = Theme.of(context);
+    return StreamBuilder<List<PendingAudioUpload>>(
+      stream: SessionManager.instance.pendingUploadsStream,
+      initialData: SessionManager.instance.pendingUploads,
+      builder: (context, snapshot) {
+        final pending = snapshot.data ?? const [];
+        if (pending.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        final lastErr = pending.first.lastError;
+        return Padding(
+          padding: const EdgeInsets.only(top: 16.0),
+          child: Card(
+            color: Colors.amber.withValues(alpha: 0.12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: Colors.amber.withValues(alpha: 0.5)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(14.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.cloud_upload_outlined, color: Colors.amber, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${pending.length} recording${pending.length == 1 ? '' : 's'} saved on device (upload pending)',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: Colors.amber.shade200,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (lastErr != null && lastErr.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      lastErr,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.tonalIcon(
+                      onPressed: _retryingUploads ? null : _handleRetryPendingUploads,
+                      icon: _retryingUploads
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.refresh, size: 16),
+                      label: Text(_retryingUploads ? 'Uploading...' : 'Retry Upload'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildSessionCard(BuildContext context, Session session) {
     final theme = Theme.of(context);
     final dateFormat = DateFormat('MMM dd, HH:mm');
+    final hasPendingAudio = SessionManager.instance.hasPendingUpload(session.id);
 
     Color statusColor = Colors.grey;
     if (session.status == SessionStatus.completed) statusColor = Colors.green;
-    if (session.status == SessionStatus.processing) statusColor = Colors.amber;
+    if (session.status == SessionStatus.processing || hasPendingAudio) statusColor = Colors.amber;
     if (session.status == SessionStatus.failed) statusColor = Colors.red;
+
+    final statusLabel = hasPendingAudio ? 'UPLOAD PENDING' : session.status.name.toUpperCase();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10.0),
@@ -339,7 +443,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      session.status.name.toUpperCase(),
+                      statusLabel,
                       style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor),
                     ),
                   ),

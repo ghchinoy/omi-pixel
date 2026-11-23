@@ -124,6 +124,18 @@ class _LiveScreenState extends State<LiveScreen> with SingleTickerProviderStateM
       if (!mounted) return;
 
       if (session != null) {
+        if (SessionManager.instance.hasPendingUpload(session.id)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                SessionManager.instance.lastUploadError ??
+                    'Audio saved on device and queued for retry.',
+              ),
+              backgroundColor: Colors.orange.shade800,
+              duration: const Duration(seconds: 6),
+            ),
+          );
+        }
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(

@@ -1,15 +1,19 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:omi_pixel/models/device.dart';
 import 'package:omi_pixel/models/segment.dart';
 import 'package:omi_pixel/models/session.dart';
+import 'package:omi_pixel/services/api_client.dart';
 import 'package:omi_pixel/services/audio_decoder.dart';
+import 'package:omi_pixel/services/recording_file_store.dart';
 import 'package:omi_pixel/services/session_manager.dart';
 import 'package:omi_pixel/services/settings_service.dart';
 import 'package:omi_pixel/ui/live_screen.dart';
@@ -327,6 +331,138 @@ void main() {
       expect(result.status, SessionStatus.failed);
       expect(savedStatus, 'failed');
       expect(savedSummary, contains('No audio'));
+    });
+  });
+
+  group('Disk-Backed PCM/WAV & Pending Upload Queue Tests', () {
+    test('RecordingFileStore streams PCM to disk, finalizes valid WAV, and recovers orphaned PCM', () async {
+      final tempDir = await Directory.systemTemp.createTemp('omi_pixel_store_test_');
+      addTearDown(() => tempDir.delete(recursive: true));
+
+      final store = RecordingFileStore(baseDirProvider: () async => tempDir);
+
+      // 1. Stream PCM chunks and finalize to WAV
+      final pcmFile = await store.startPcmStream('sess_disk_1');
+      store.appendPcmChunk(Uint8List.fromList(List<int>.filled(1600, 1)));
+      store.appendPcmChunk(Uint8List.fromList(List<int>.filled(1600, 2)));
+
+      final wavFile = await store.finalizeActiveToWav('sess_disk_1');
+      expect(wavFile, isNotNull);
+      expect(await wavFile!.exists(), isTrue);
+      expect(await pcmFile.exists(), isFalse);
+      final wavBytes = await wavFile.readAsBytes();
+      expect(wavBytes.length, 44 + 3200);
+      expect(String.fromCharCodes(wavBytes.sublist(0, 4)), 'RIFF');
+      expect(String.fromCharCodes(wavBytes.sublist(8, 12)), 'WAVE');
+
+      // 2. Simulate crash leaving an orphaned .pcm file on disk
+      final orphanPcm = File('${tempDir.path}/omi_recordings/sess_crashed.pcm');
+      await orphanPcm.writeAsBytes(Uint8List(640));
+
+      final recovered = await store.recoverOrphanedPcmFiles();
+      expect(recovered.any((u) => u.sessionId == 'sess_crashed'), isTrue);
+      expect(await orphanPcm.exists(), isFalse);
+      final recoveredItem = recovered.firstWhere((u) => u.sessionId == 'sess_crashed');
+      expect(await File(recoveredItem.wavPath).exists(), isTrue);
+      expect(await File(recoveredItem.wavPath).length(), 44 + 640);
+    });
+
+    test('Failed upload keeps WAV on disk and succeeds on manual retry with cleanup', () async {
+      SharedPreferences.setMockInitialValues({});
+      final tempDir = await Directory.systemTemp.createTemp('omi_pixel_queue_test_');
+      addTearDown(() => tempDir.delete(recursive: true));
+
+      final store = RecordingFileStore(baseDirProvider: () async => tempDir);
+      SessionManager.instance.setFileStoreForTesting(store);
+
+      await store.startPcmStream('sess_retry_1');
+      store.appendPcmChunk(Uint8List(1024));
+      final wavFile = await store.finalizeActiveToWav('sess_retry_1');
+      expect(wavFile, isNotNull);
+
+      final baseSession = Session(
+        id: 'sess_retry_1',
+        deviceId: 'omi_1',
+        title: 'Retry Test',
+        status: SessionStatus.recording,
+        startedAt: DateTime.now(),
+        createdAt: DateTime.now(),
+      );
+
+      // First attempt fails (503) — WAV must remain on disk & queued
+      final firstResult = await SessionManager.instance.finalizeStoppedSession(
+        session: baseSession,
+        wavFile: wavFile,
+        liveTranscript: '',
+        finishTime: DateTime.now(),
+        durationSec: 5.0,
+        apiConfigured: true,
+        uploadAudioFile: (id, file) async => const AudioUploadResult(
+          statusCode: 503,
+          error: 'Upload failed (HTTP 503): Service Unavailable',
+        ),
+      );
+
+      expect(firstResult.status, SessionStatus.processing);
+      expect(await wavFile!.exists(), isTrue);
+      expect(SessionManager.instance.hasPendingUpload('sess_retry_1'), isTrue);
+      expect(SessionManager.instance.pendingUploadFor('sess_retry_1')?.attempts, 1);
+      expect(SessionManager.instance.lastUploadError, contains('503'));
+
+      // Retry succeeds (200) — WAV must be deleted and queue cleared
+      final retryResult = await SessionManager.instance.retryPendingUpload(
+        'sess_retry_1',
+        uploadAudioFile: (id, file) async => AudioUploadResult(
+          statusCode: 200,
+          session: baseSession.copyWith(status: SessionStatus.completed, title: 'Diarized Retry'),
+        ),
+      );
+
+      expect(retryResult.isSuccess, isTrue);
+      expect(await wavFile.exists(), isFalse);
+      expect(SessionManager.instance.hasPendingUpload('sess_retry_1'), isFalse);
+    });
+
+    test('ApiClient.uploadAudioDetailed retries once with forceRefresh=true on HTTP 401', () async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.instance.init();
+
+      final forceRefreshCalls = <bool>[];
+      int attemptCount = 0;
+
+      final result = await ApiClient.instance.uploadAudioDetailed(
+        'sess_401_test',
+        wavBytes: AudioDecoder.createWav(Uint8List(320)),
+        baseUrlOverride: 'https://example.run.app',
+        tokenProvider: ({bool forceRefresh = false}) async {
+          forceRefreshCalls.add(forceRefresh);
+          return forceRefresh ? 'fresh-jwt-token' : 'expired-jwt-token';
+        },
+        sendRequest: (req) async {
+          attemptCount++;
+          if (attemptCount == 1) {
+            expect(req.headers['Authorization'], 'Bearer expired-jwt-token');
+            return http.Response('{"error":"token expired"}', 401);
+          }
+          expect(req.headers['Authorization'], 'Bearer fresh-jwt-token');
+          return http.Response(
+            jsonEncode({
+              'id': 'sess_401_test',
+              'device_id': 'omi_1',
+              'title': 'Recovered After 401',
+              'status': 'completed',
+              'started_at': DateTime.now().toUtc().toIso8601String(),
+              'created_at': DateTime.now().toUtc().toIso8601String(),
+            }),
+            200,
+          );
+        },
+      );
+
+      expect(result.isSuccess, isTrue);
+      expect(result.session?.title, 'Recovered After 401');
+      expect(attemptCount, 2);
+      expect(forceRefreshCalls, [false, true]);
     });
   });
 }

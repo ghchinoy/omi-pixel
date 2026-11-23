@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,6 +13,7 @@ import 'api_client.dart';
 import 'audio_decoder.dart';
 import 'ble_service.dart';
 import 'gemini_live_service.dart';
+import 'recording_file_store.dart';
 import 'settings_service.dart';
 
 /// Snapshot of live BLE connection and PCM audio capture health during a recording.
@@ -36,12 +38,13 @@ class SessionManager {
   SessionManager._();
 
   final GeminiLiveService _geminiLive = GeminiLiveService();
-  final List<Uint8List> _recordedPcmChunks = [];
+  RecordingFileStore _fileStore = RecordingFileStore();
   int _totalRecordedBytes = 0;
   int _receivedPacketCount = 0;
   DateTime? _lastAudioAt;
   bool _bleDisconnectedDuringRecording = false;
   bool _stalledWarningEmitted = false;
+  bool _retryingPendingUploads = false;
 
   Session? _activeSession;
   Session? get activeSession => _activeSession;
@@ -70,11 +73,35 @@ class SessionManager {
   final _audioHealthController = StreamController<RecordingAudioHealth>.broadcast();
   Stream<RecordingAudioHealth> get audioHealthStream => _audioHealthController.stream;
 
+  final _pendingUploadsController = StreamController<List<PendingAudioUpload>>.broadcast();
+  Stream<List<PendingAudioUpload>> get pendingUploadsStream => _pendingUploadsController.stream;
+
+  List<PendingAudioUpload> _pendingUploads = [];
+  List<PendingAudioUpload> get pendingUploads => List.unmodifiable(_pendingUploads);
+
+  bool hasPendingUpload(String sessionId) =>
+      _pendingUploads.any((u) => u.sessionId == sessionId);
+
+  PendingAudioUpload? pendingUploadFor(String sessionId) {
+    for (final u in _pendingUploads) {
+      if (u.sessionId == sessionId) return u;
+    }
+    return null;
+  }
+
+  @visibleForTesting
+  void setFileStoreForTesting(RecordingFileStore store) {
+    _fileStore = store;
+  }
+
   RecordingAudioHealth _currentAudioHealth = const RecordingAudioHealth();
   RecordingAudioHealth get currentAudioHealth => _currentAudioHealth;
 
   String? _lastForegroundServiceError;
   String? get lastForegroundServiceError => _lastForegroundServiceError;
+
+  String? _lastUploadError;
+  String? get lastUploadError => _lastUploadError;
 
   Timer? _durationTimer;
   int _elapsedSeconds = 0;
@@ -91,6 +118,22 @@ class SessionManager {
     await AudioDecoder.instance.init();
     await _loadLocalSessions();
     _initForegroundTask();
+    await _recoverAndRetryPendingUploadsOnStartup();
+  }
+
+  Future<void> _recoverAndRetryPendingUploadsOnStartup() async {
+    try {
+      _pendingUploads = await _fileStore.recoverOrphanedPcmFiles(
+        activeSessionId: _activeSession?.id,
+      );
+      _pendingUploadsController.add(_pendingUploads);
+      if (_pendingUploads.isNotEmpty && ApiClient.instance.isConfigured) {
+        debugPrint('[SessionManager] Found ${_pendingUploads.length} pending audio upload(s); retrying in background.');
+        unawaited(retryAllPendingUploads());
+      }
+    } catch (e) {
+      debugPrint('[SessionManager] Error recovering pending uploads: $e');
+    }
   }
 
   void _initForegroundTask() {
@@ -206,18 +249,27 @@ class SessionManager {
       createdAt: now,
     );
 
-    _recordedPcmChunks.clear();
     _totalRecordedBytes = 0;
     _receivedPacketCount = 0;
     _lastAudioAt = null;
     _bleDisconnectedDuringRecording = false;
     _stalledWarningEmitted = false;
+    _lastUploadError = null;
     _liveTranscriptBuffer.clear();
     _elapsedSeconds = 0;
     _isRecording = true;
     _emitAudioHealth(bleConnected: true, stalled: false);
     _recordingStateController.add(true);
     _transcriptStreamController.add('');
+
+    // Open on-device PCM file under ApplicationDocumentsDirectory for crash-safe streaming
+    try {
+      await _fileStore.startPcmStream(sessionId);
+    } catch (e) {
+      final msg = 'Failed to open local recording file: $e';
+      debugPrint('[SessionManager] $msg');
+      _warningController.add(msg);
+    }
 
     // Monitor BLE connection drops during recording
     await _bleDeviceSub?.cancel();
@@ -303,7 +355,7 @@ class SessionManager {
     _audioStreamSub = BleService.instance.startPcmAudioStream().listen(
       (pcmBytes) {
         final chunk = Uint8List.fromList(pcmBytes);
-        _recordedPcmChunks.add(chunk);
+        _fileStore.appendPcmChunk(chunk);
         _totalRecordedBytes += chunk.length;
         _receivedPacketCount++;
         _lastAudioAt = DateTime.now();
@@ -366,27 +418,18 @@ class SessionManager {
     final finishTime = DateTime.now();
     final durationSec = _elapsedSeconds.toDouble();
 
-    // Combine all PCM chunks
-    final pcmBuffer = Uint8List(_totalRecordedBytes);
-    int offset = 0;
-    for (final chunk in _recordedPcmChunks) {
-      pcmBuffer.setRange(offset, offset + chunk.length, chunk);
-      offset += chunk.length;
-    }
-
-    // Package to WAV
-    final wavBytes = AudioDecoder.createWav(pcmBuffer);
+    // Finalize disk-streamed PCM file into a durable local WAV file
+    final wavFile = await _fileStore.finalizeActiveToWav(_activeSession!.id);
 
     final updatedSession = await finalizeStoppedSession(
       session: _activeSession!,
-      wavBytes: wavBytes,
+      wavFile: wavFile,
       liveTranscript: _liveTranscriptBuffer.toString(),
       finishTime: finishTime,
       durationSec: durationSec,
     );
 
     _activeSession = null;
-    _recordedPcmChunks.clear();
     _totalRecordedBytes = 0;
     _receivedPacketCount = 0;
     _lastAudioAt = null;
@@ -399,17 +442,19 @@ class SessionManager {
 
   /// Finalizes a stopped session locally and on the backend.
   ///
-  /// Handles 0-audio recordings cleanly so Firestore never remains stuck in
-  /// `status='recording'`: saves live transcript segments if present, or marks
-  /// the session `failed` when neither audio nor transcript was captured.
+  /// Persists the WAV file in the pending upload queue until `POST /api/sessions/{id}/audio`
+  /// succeeds (HTTP 200), keeping audio safely on disk for retry on failure.
+  /// Handles 0-audio recordings cleanly so Firestore never remains stuck in `status='recording'`.
   @visibleForTesting
   Future<Session> finalizeStoppedSession({
     required Session session,
-    required Uint8List wavBytes,
+    File? wavFile,
+    Uint8List? wavBytes,
     required String liveTranscript,
     required DateTime finishTime,
     required double durationSec,
     bool? apiConfigured,
+    Future<AudioUploadResult> Function(String sessionId, File wavFile)? uploadAudioFile,
     Future<Session?> Function(String sessionId, Uint8List wavBytes)? uploadAudio,
     Future<bool> Function(
       String sessionId,
@@ -420,7 +465,7 @@ class SessionManager {
     })? saveSegments,
   }) async {
     final isConfigured = apiConfigured ?? ApiClient.instance.isConfigured;
-    final doUploadAudio = uploadAudio ?? ApiClient.instance.uploadAudio;
+    final doUploadFile = uploadAudioFile ?? ApiClient.instance.uploadAudioFile;
     final doSaveSegments = saveSegments ?? ApiClient.instance.saveSegments;
 
     Session updatedSession = session.copyWith(
@@ -430,9 +475,43 @@ class SessionManager {
     );
     _saveSessionLocally(updatedSession);
 
-    if (isConfigured && wavBytes.length > 44) {
+    final hasWavFile = wavFile != null && await wavFile.exists() && await wavFile.length() > 44;
+    final hasWavBytes = wavBytes != null && wavBytes.length > 44;
+
+    if (hasWavFile) {
+      // Enqueue durably BEFORE uploading so interruptions/failures never lose the WAV
+      _pendingUploads = await _fileStore.enqueuePendingUpload(
+        PendingAudioUpload(
+          sessionId: updatedSession.id,
+          wavPath: wavFile.path,
+          createdAt: finishTime,
+        ),
+      );
+      _pendingUploadsController.add(_pendingUploads);
+
+      if (isConfigured) {
+        final result = await _uploadQueuedItem(
+          updatedSession.id,
+          wavFile,
+          doUploadFile: doUploadFile,
+        );
+        if (result.session != null) {
+          return result.session!;
+        }
+        return updatedSession;
+      }
+      const msg = 'Cloud Run URL not configured. Recording saved on device for later upload.';
+      _lastUploadError = msg;
+      _pendingUploads = await _fileStore.recordUploadFailure(updatedSession.id, msg);
+      _pendingUploadsController.add(_pendingUploads);
+      _warningController.add(msg);
+      return updatedSession;
+    }
+
+    if (isConfigured && hasWavBytes) {
       try {
-        final diarizedSession = await doUploadAudio(updatedSession.id, wavBytes);
+        final doUploadBytes = uploadAudio ?? ApiClient.instance.uploadAudio;
+        final diarizedSession = await doUploadBytes(updatedSession.id, wavBytes);
         if (diarizedSession != null) {
           updatedSession = diarizedSession;
           _saveSessionLocally(updatedSession);
@@ -490,6 +569,76 @@ class SessionManager {
       );
     }
     return updatedSession;
+  }
+
+  Future<AudioUploadResult> _uploadQueuedItem(
+    String sessionId,
+    File wavFile, {
+    required Future<AudioUploadResult> Function(String sessionId, File wavFile) doUploadFile,
+  }) async {
+    final result = await doUploadFile(sessionId, wavFile);
+    if (result.isSuccess && result.session != null) {
+      _lastUploadError = null;
+      _saveSessionLocally(result.session!);
+      _pendingUploads = await _fileStore.markUploadComplete(sessionId);
+      _pendingUploadsController.add(_pendingUploads);
+      debugPrint('[SessionManager] Uploaded and cleaned up local WAV for $sessionId.');
+      return result;
+    }
+
+    final errMsg = result.error ?? 'Audio upload failed; saved on device for retry.';
+    _lastUploadError = errMsg;
+    _pendingUploads = await _fileStore.recordUploadFailure(sessionId, errMsg);
+    _pendingUploadsController.add(_pendingUploads);
+    _warningController.add(errMsg);
+    debugPrint('[SessionManager] Keeping local WAV for $sessionId after failure: $errMsg');
+    return result;
+  }
+
+  /// Retries uploading a single pending session WAV from disk.
+  Future<AudioUploadResult> retryPendingUpload(
+    String sessionId, {
+    Future<AudioUploadResult> Function(String sessionId, File wavFile)? uploadAudioFile,
+  }) async {
+    final item = pendingUploadFor(sessionId);
+    if (item == null) {
+      return const AudioUploadResult(error: 'No pending upload found for this session.');
+    }
+    final wavFile = File(item.wavPath);
+    if (!await wavFile.exists()) {
+      _pendingUploads = await _fileStore.markUploadComplete(sessionId);
+      _pendingUploadsController.add(_pendingUploads);
+      return const AudioUploadResult(error: 'Local audio file no longer exists on device.');
+    }
+    return _uploadQueuedItem(
+      sessionId,
+      wavFile,
+      doUploadFile: uploadAudioFile ?? ApiClient.instance.uploadAudioFile,
+    );
+  }
+
+  /// Retries all pending on-device WAV uploads sequentially.
+  Future<int> retryAllPendingUploads({
+    Future<AudioUploadResult> Function(String sessionId, File wavFile)? uploadAudioFile,
+  }) async {
+    if (_retryingPendingUploads) return 0;
+    _retryingPendingUploads = true;
+    int succeeded = 0;
+    try {
+      final snapshot = List<PendingAudioUpload>.from(_pendingUploads);
+      for (final item in snapshot) {
+        final res = await retryPendingUpload(
+          item.sessionId,
+          uploadAudioFile: uploadAudioFile,
+        );
+        if (res.isSuccess) {
+          succeeded++;
+        }
+      }
+    } finally {
+      _retryingPendingUploads = false;
+    }
+    return succeeded;
   }
 
   Future<void> refreshSessions() async {

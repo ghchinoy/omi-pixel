@@ -65,11 +65,15 @@ class AudioDecoder {
     return payloadUint8;
   }
 
-  /// Builds a complete 44-byte RIFF WAV byte array from raw 16-bit 16kHz mono PCM data.
-  static Uint8List createWav(Uint8List pcmData, {int sampleRate = 16000, int channels = 1, int bitsPerSample = 16}) {
+  /// Builds a 44-byte RIFF WAV header for raw 16-bit 16kHz mono PCM data of [dataSize] bytes.
+  static Uint8List createWavHeader(
+    int dataSize, {
+    int sampleRate = 16000,
+    int channels = 1,
+    int bitsPerSample = 16,
+  }) {
     final byteRate = sampleRate * channels * (bitsPerSample ~/ 8);
     final blockAlign = channels * (bitsPerSample ~/ 8);
-    final dataSize = pcmData.length;
     final chunkSize = 36 + dataSize;
 
     final header = ByteData(44);
@@ -80,8 +84,8 @@ class AudioDecoder {
     header.setUint8(2, 0x46); // F
     header.setUint8(3, 0x46); // F
     header.setUint32(4, chunkSize, Endian.little);
-    header.setUint8(8, 0x57);  // W
-    header.setUint8(9, 0x41);  // A
+    header.setUint8(8, 0x57); // W
+    header.setUint8(9, 0x41); // A
     header.setUint8(10, 0x56); // V
     header.setUint8(11, 0x45); // E
 
@@ -91,7 +95,7 @@ class AudioDecoder {
     header.setUint8(14, 0x74); // t
     header.setUint8(15, 0x20); // (space)
     header.setUint32(16, 16, Endian.little); // Subchunk1Size (16 for PCM)
-    header.setUint16(20, 1, Endian.little);  // AudioFormat (1 for PCM)
+    header.setUint16(20, 1, Endian.little); // AudioFormat (1 for PCM)
     header.setUint16(22, channels, Endian.little);
     header.setUint32(24, sampleRate, Endian.little);
     header.setUint32(28, byteRate, Endian.little);
@@ -105,9 +109,20 @@ class AudioDecoder {
     header.setUint8(39, 0x61); // a
     header.setUint32(40, dataSize, Endian.little);
 
-    final wav = Uint8List(44 + dataSize);
-    wav.setRange(0, 44, header.buffer.asUint8List());
-    wav.setRange(44, 44 + dataSize, pcmData);
+    return header.buffer.asUint8List();
+  }
+
+  /// Builds a complete 44-byte RIFF WAV byte array from raw 16-bit 16kHz mono PCM data.
+  static Uint8List createWav(Uint8List pcmData, {int sampleRate = 16000, int channels = 1, int bitsPerSample = 16}) {
+    final header = createWavHeader(
+      pcmData.length,
+      sampleRate: sampleRate,
+      channels: channels,
+      bitsPerSample: bitsPerSample,
+    );
+    final wav = Uint8List(44 + pcmData.length);
+    wav.setRange(0, 44, header);
+    wav.setRange(44, 44 + pcmData.length, pcmData);
     return wav;
   }
 }
