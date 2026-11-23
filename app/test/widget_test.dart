@@ -168,6 +168,105 @@ void main() {
 
       expect(OmiButtonEvent.parsePayload([1, 0]), isNull);
     });
+
+    test('SessionManager.handleHardwareButtonEvent enforces unlock, debounce, and haptic actions', () async {
+      final sm = SessionManager.instance;
+      sm.setRecordingStateForTesting(false);
+      sm.resetHardwareButtonDebounceForTesting();
+      addTearDown(() {
+        sm.setRecordingStateForTesting(false);
+        sm.resetHardwareButtonDebounceForTesting();
+      });
+
+      final t0 = DateTime(2026, 11, 23, 15, 40, 0);
+      int startCalls = 0;
+      int stopCalls = 0;
+      int startHaptics = 0;
+      int stopHaptics = 0;
+
+      // 1. Locked device blocks single-tap start
+      final lockedRes = await sm.handleHardwareButtonEvent(
+        OmiButtonEvent.parsePayload([1, 0, 0, 0, 0, 0, 0, 0])!,
+        featureEnabled: true,
+        nowOverride: t0,
+        isDeviceLocked: () async => true,
+        startRecordingFn: () async {
+          startCalls++;
+          return true;
+        },
+      );
+      expect(lockedRes, 'blocked_locked');
+      expect(startCalls, 0);
+
+      // 2. Unlocked device starts recording + plays 1x haptic
+      final startedRes = await sm.handleHardwareButtonEvent(
+        OmiButtonEvent.parsePayload([1, 0, 0, 0, 0, 0, 0, 0])!,
+        featureEnabled: true,
+        nowOverride: t0,
+        isDeviceLocked: () async => false,
+        startRecordingFn: () async {
+          startCalls++;
+          sm.setRecordingStateForTesting(true);
+          return true;
+        },
+        playStartHaptic: () async {
+          startHaptics++;
+          return true;
+        },
+      );
+      expect(startedRes, 'started');
+      expect(startCalls, 1);
+      expect(startHaptics, 1);
+
+      // 3. Release event (code 5) & rapid bounce within 1.5s are ignored/debounced
+      final releaseRes = await sm.handleHardwareButtonEvent(
+        OmiButtonEvent.parsePayload([5, 0, 0, 0, 0, 0, 0, 0])!,
+        featureEnabled: true,
+        nowOverride: t0.add(const Duration(milliseconds: 50)),
+      );
+      expect(releaseRes, isNull);
+
+      final bouncedRes = await sm.handleHardwareButtonEvent(
+        OmiButtonEvent.parsePayload([2, 0, 0, 0, 0, 0, 0, 0])!,
+        featureEnabled: true,
+        nowOverride: t0.add(const Duration(milliseconds: 500)),
+      );
+      expect(bouncedRes, 'debounced');
+
+      // 4. Double tap after debounce stops recording (even if locked) + plays 2x haptic
+      final stoppedRes = await sm.handleHardwareButtonEvent(
+        OmiButtonEvent.parsePayload([2, 0, 0, 0, 0, 0, 0, 0])!,
+        featureEnabled: true,
+        nowOverride: t0.add(const Duration(seconds: 2)),
+        isDeviceLocked: () async => true,
+        stopRecordingFn: () async {
+          stopCalls++;
+          sm.setRecordingStateForTesting(false);
+          return null;
+        },
+        playStopHaptic: () async {
+          stopHaptics++;
+          return true;
+        },
+      );
+      expect(stoppedRes, 'stopped');
+      expect(stopCalls, 1);
+      expect(stopHaptics, 1);
+
+      // 5. Disabled setting ignores all button events
+      final disabledRes = await sm.handleHardwareButtonEvent(
+        OmiButtonEvent.parsePayload([1, 0, 0, 0, 0, 0, 0, 0])!,
+        featureEnabled: false,
+        nowOverride: t0.add(const Duration(seconds: 5)),
+        isDeviceLocked: () async => false,
+        startRecordingFn: () async {
+          startCalls++;
+          return true;
+        },
+      );
+      expect(disabledRes, isNull);
+      expect(startCalls, 1);
+    });
   });
 
   group('AudioDecoder Tests', () {

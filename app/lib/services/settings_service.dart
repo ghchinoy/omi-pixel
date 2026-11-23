@@ -13,6 +13,7 @@ class SettingsService {
   static const String _keyGenerateSummary = 'generate_summary';
   static const String _keyLiveTranscriptionMode = 'live_transcription_mode';
   static const String _keyThemeMode = 'theme_mode';
+  static const String _keyHardwareButtonEnabled = 'hardware_button_enabled';
 
   static const String defaultSummaryModel = 'gemini-4-hydrogen';
   static const List<String> supportedSummaryModels = [
@@ -92,4 +93,7 @@ class SettingsService {
 
   bool get generateSummary => _prefs?.getBool(_keyGenerateSummary) ?? true;
   set generateSummary(bool value) => _prefs?.setBool(_keyGenerateSummary, value);
+
+  bool get hardwareButtonEnabled => _prefs?.getBool(_keyHardwareButtonEnabled) ?? true;
+  set hardwareButtonEnabled(bool value) => _prefs?.setBool(_keyHardwareButtonEnabled, value);
 }

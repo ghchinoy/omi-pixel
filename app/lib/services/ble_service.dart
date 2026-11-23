@@ -299,6 +299,14 @@ class BleService {
     }
   }
 
+  /// Triggers two short haptic pulses (20ms × 2) to confirm recording stopped.
+  Future<bool> playDoubleHaptic() async {
+    final first = await playHaptic(level: 1);
+    if (!first) return false;
+    await Future<void>.delayed(const Duration(milliseconds: 130));
+    return playHaptic(level: 1);
+  }
+
   BluetoothCharacteristic? _findCharacteristic(
     List<BluetoothService> services,
     String serviceUuid,

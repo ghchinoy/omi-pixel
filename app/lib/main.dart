@@ -27,6 +27,19 @@ void main() async {
     }
   });
 
+  SessionManager.instance.hardwareButtonActionStream.listen((action) {
+    if (action == 'started' &&
+        SessionManager.instance.isRecording &&
+        !LiveScreen.isActive &&
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      appNavigatorKey.currentState?.push(
+        MaterialPageRoute(builder: (_) => const LiveScreen()),
+      );
+    } else if (action == 'stopped' && LiveScreen.isActive) {
+      appNavigatorKey.currentState?.pop();
+    }
+  });
+
   runApp(const OmiPixelApp());
 }
 

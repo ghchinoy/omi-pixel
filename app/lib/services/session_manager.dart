@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -103,6 +104,15 @@ class SessionManager {
   final _diarizationCompletedController = StreamController<Session>.broadcast();
   Stream<Session> get diarizationCompletedStream => _diarizationCompletedController.stream;
 
+  final _hardwareButtonActionController = StreamController<String>.broadcast();
+  Stream<String> get hardwareButtonActionStream => _hardwareButtonActionController.stream;
+
+  static const MethodChannel _deviceStateChannel =
+      MethodChannel('com.ghchinoy.omi_pixel/device_state');
+  static const Duration _hardwareButtonDebounce = Duration(milliseconds: 1500);
+  DateTime? _lastHardwareButtonHandledAt;
+  StreamSubscription<OmiButtonEvent>? _hardwareButtonSub;
+
   final Set<String> _activeDiarizingSessions = {};
   Set<String> get activeDiarizingSessions => Set.unmodifiable(_activeDiarizingSessions);
 
@@ -162,7 +172,87 @@ class SessionManager {
     if (!_isRecording) {
       await _stopForegroundRecordingService();
     }
+    await _hardwareButtonSub?.cancel();
+    _hardwareButtonSub = BleService.instance.buttonEventStream.listen((event) {
+      unawaited(handleHardwareButtonEvent(event));
+    });
     await _recoverAndRetryPendingUploadsOnStartup();
+  }
+
+  Future<bool> _isDeviceLocked() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      final locked = await _deviceStateChannel.invokeMethod<bool>('isDeviceLocked');
+      return locked == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Handles decoded Omi hardware button notifications:
+  /// - Single tap (`1`) when idle + Pixel unlocked -> starts recording + 1x haptic buzz.
+  /// - Double tap (`2`) when actively recording -> finishes & diarizes + 2x haptic buzz.
+  /// - Long press (`3`, firmware power-off) & release (`5`) -> ignored.
+  @visibleForTesting
+  Future<String?> handleHardwareButtonEvent(
+    OmiButtonEvent event, {
+    bool? featureEnabled,
+    DateTime? nowOverride,
+    Future<bool> Function()? isDeviceLocked,
+    Future<bool> Function()? startRecordingFn,
+    Future<Session?> Function()? stopRecordingFn,
+    Future<bool> Function()? playStartHaptic,
+    Future<bool> Function()? playStopHaptic,
+  }) async {
+    final enabled = featureEnabled ?? SettingsService.instance.hardwareButtonEnabled;
+    if (!enabled) return null;
+
+    if (event.type != OmiButtonEventType.singleTap &&
+        event.type != OmiButtonEventType.doubleTap) {
+      return null;
+    }
+
+    final now = nowOverride ?? DateTime.now();
+    if (_lastHardwareButtonHandledAt != null &&
+        now.difference(_lastHardwareButtonHandledAt!) < _hardwareButtonDebounce) {
+      debugPrint('[SessionManager] Debounced Omi button event: ${event.type.name}');
+      return 'debounced';
+    }
+
+    if (event.type == OmiButtonEventType.singleTap) {
+      if (_isRecording) return null;
+
+      final locked = await (isDeviceLocked ?? _isDeviceLocked)();
+      if (locked) {
+        debugPrint('[SessionManager] Ignored Omi single-tap start because device is locked.');
+        return 'blocked_locked';
+      }
+
+      _lastHardwareButtonHandledAt = now;
+      final started = await (startRecordingFn ?? startRecording)();
+      if (!started) return 'start_failed';
+
+      unawaited((playStartHaptic ?? () => BleService.instance.playHaptic(level: 2))());
+      _hardwareButtonActionController.add('started');
+      return 'started';
+    }
+
+    if (event.type == OmiButtonEventType.doubleTap) {
+      if (!_isRecording) return null;
+
+      _lastHardwareButtonHandledAt = now;
+      await (stopRecordingFn ?? stopRecording)();
+      unawaited((playStopHaptic ?? BleService.instance.playDoubleHaptic)());
+      _hardwareButtonActionController.add('stopped');
+      return 'stopped';
+    }
+
+    return null;
+  }
+
+  @visibleForTesting
+  void resetHardwareButtonDebounceForTesting() {
+    _lastHardwareButtonHandledAt = null;
   }
 
   Future<void> _recoverAndRetryPendingUploadsOnStartup() async {

@@ -4,8 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
 
+import '../models/device.dart';
 import '../services/auth_service.dart';
 import '../services/ble_service.dart';
 import '../services/settings_service.dart';
@@ -28,13 +28,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _selectedSummaryModel = SettingsService.defaultSummaryModel;
   String _selectedThemeMode = 'system';
   bool _generateSummary = true;
+  bool _hardwareButtonEnabled = true;
   bool _testingConnection = false;
   String? _connectionStatusMessage;
   bool _connectionSuccess = false;
   String? _backendVersion;
   bool? _ignoringBatteryOptimizations;
-  StreamSubscription<OmiButtonEvent>? _buttonEventSub;
-  List<OmiButtonEvent> _buttonEvents = [];
+  StreamSubscription<OmiDeviceInfo?>? _deviceSub;
 
   @override
   void initState() {
@@ -46,12 +46,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _selectedSummaryModel = s.summaryModel;
     _selectedThemeMode = s.themeModePreference;
     _generateSummary = s.generateSummary;
-    _buttonEvents = List<OmiButtonEvent>.from(BleService.instance.recentButtonEvents);
-    _buttonEventSub = BleService.instance.buttonEventStream.listen((_) {
-      if (!mounted) return;
-      setState(() {
-        _buttonEvents = List<OmiButtonEvent>.from(BleService.instance.recentButtonEvents);
-      });
+    _hardwareButtonEnabled = s.hardwareButtonEnabled;
+    _deviceSub = BleService.instance.deviceStream.listen((_) {
+      if (mounted) setState(() {});
     });
     if (s.cloudRunUrl.isNotEmpty) {
       _fetchBackendVersion(s.cloudRunUrl);
@@ -97,7 +94,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
-    _buttonEventSub?.cancel();
+    _deviceSub?.cancel();
     _cloudRunUrlController.dispose();
     super.dispose();
   }
@@ -110,6 +107,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     s.summaryModel = _selectedSummaryModel;
     s.themeModePreference = _selectedThemeMode;
     s.generateSummary = _generateSummary;
+    s.hardwareButtonEnabled = _hardwareButtonEnabled;
 
     final lustrous = LustrousColors.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -461,97 +459,97 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 24),
           ],
-          if (BleService.instance.currentDevice?.isConnected == true) ...[
-            Text(
-              'Omi Hardware Button & Haptic Probe',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.bold,
-              ),
+          Text(
+            'Omi Hardware Button Control',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(height: 8),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Button GATT: ${BleService.instance.hasButtonCharacteristic ? "Subscribed" : "Not found"}\n'
-                            'Haptic GATT: ${BleService.instance.hasHapticCharacteristic ? "Available" : "Not found"}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                              height: 1.5,
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SwitchListTile(
+                    title: const Text('Start & Finish via Omi Button'),
+                    subtitle: const Text(
+                      'Single tap: start recording (1 buzz) • Double tap: finish & diarize (2 buzzes)',
+                    ),
+                    value: _hardwareButtonEnabled,
+                    onChanged: (val) {
+                      setState(() => _hardwareButtonEnabled = val);
+                      SettingsService.instance.hardwareButtonEnabled = val;
+                    },
+                    secondary: const Icon(Icons.radio_button_checked),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainer,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: theme.colorScheme.outlineVariant),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.info_outline, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Android disclosure: Starting a new recording with the Omi button requires your Pixel to be unlocked and Omi-Pixel allowed to run in the background (Unrestricted battery). Double-tap to finish works even while locked.',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                                height: 1.4,
+                              ),
                             ),
                           ),
-                        ),
-                        if (BleService.instance.hasHapticCharacteristic)
-                          FilledButton.tonalIcon(
-                            onPressed: () async {
-                              final ok = await BleService.instance.playHaptic(level: 2);
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(ok ? 'Haptic pulse sent (50ms)' : 'Haptic write failed'),
-                                  duration: const Duration(seconds: 2),
-                                ),
-                              );
-                            },
-                            icon: const Icon(Icons.vibration, size: 16),
-                            label: const Text('Buzz Omi'),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Recent Button Events (${_buttonEvents.length})',
-                          style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        if (_buttonEvents.isNotEmpty)
-                          TextButton(
-                            onPressed: () {
-                              BleService.instance.clearRecentButtonEvents();
-                              setState(() => _buttonEvents = []);
-                            },
-                            child: const Text('Clear'),
-                          ),
-                      ],
-                    ),
-                    if (_buttonEvents.isEmpty)
-                      Text(
-                        'Press the Omi button (single tap or double tap) here or while switched to another app, then check this log.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      )
-                    else
-                      ..._buttonEvents.take(5).map((e) {
-                        final ts = DateFormat('HH:mm:ss').format(e.timestamp);
-                        final state = e.lifecycleState?.name ?? 'unknown';
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 4.0),
-                          child: Text(
-                            '$ts • ${e.type.name} (${e.rawCode}) • app=$state • [${e.hexBytes}]',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontFamily: 'monospace',
-                              fontSize: 11.5,
+                  ),
+                  if (BleService.instance.currentDevice?.isConnected == true)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Connected: Button ${BleService.instance.hasButtonCharacteristic ? "Ready" : "Unavailable"}'
+                              ' • Haptic ${BleService.instance.hasHapticCharacteristic ? "Ready" : "Unavailable"}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
                             ),
                           ),
-                        );
-                      }),
-                  ],
-                ),
+                          if (BleService.instance.hasHapticCharacteristic)
+                            FilledButton.tonalIcon(
+                              onPressed: () async {
+                                final ok = await BleService.instance.playHaptic(level: 2);
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(ok ? 'Haptic pulse sent (50ms)' : 'Haptic write failed'),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.vibration, size: 16),
+                              label: const Text('Test Haptic'),
+                            ),
+                        ],
+                      ),
+                    ),
+                ],
               ),
             ),
-            const SizedBox(height: 24),
-          ],
+          ),
+          const SizedBox(height: 24),
           FilledButton.icon(
             onPressed: () {
               _saveSettings();
