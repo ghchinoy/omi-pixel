@@ -29,8 +29,11 @@ class _HomeScreenState extends State<HomeScreen> {
     BleService.instance.tryReconnectLastDevice();
     _diarizationDoneSub = SessionManager.instance.diarizationCompletedStream.listen((session) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.clearSnackBars();
+      messenger.showSnackBar(
         SnackBar(
+          persist: false,
           content: Text('Diarization ready: ${session.title}'),
           action: SnackBarAction(
             label: 'View',
@@ -42,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
           ),
-          duration: const Duration(seconds: 6),
+          duration: const Duration(seconds: 5),
         ),
       );
     });

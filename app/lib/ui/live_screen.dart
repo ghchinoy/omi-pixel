@@ -144,8 +144,10 @@ class _LiveScreenState extends State<LiveScreen> with SingleTickerProviderStateM
         final messenger = ScaffoldMessenger.of(context);
         final navigator = Navigator.of(context);
         navigator.pop();
+        messenger.clearSnackBars();
         messenger.showSnackBar(
           SnackBar(
+            persist: false,
             content: Text(
               SessionManager.instance.isDiarizing(session.id)
                   ? 'Recording saved — diarizing in background...'
