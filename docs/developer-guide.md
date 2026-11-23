@@ -8,7 +8,10 @@ This document covers the technical architecture, multi-pass speech-to-text pipel
 
 The Omi-Pixel system separates low-latency mobile wearable interaction from structured AI processing and cloud persistence.
 
-![Omi-Pixel Architecture](diagrams/architecture.webp)
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="diagrams/architecture-light.webp">
+  <img src="diagrams/architecture.webp" alt="Omi-Pixel Architecture">
+</picture>
 
 The architecture contains three core tiers:
 
@@ -23,7 +26,10 @@ The architecture contains three core tiers:
 
 ## 2. The Multi-Stage Pipeline
 
-![Omi-Pixel Data Flow](diagrams/dataflow.webp)
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="diagrams/dataflow-light.webp">
+  <img src="diagrams/dataflow.webp" alt="Omi-Pixel Data Flow">
+</picture>
 
 ```text
 Pass 1 (Live UX):
@@ -59,10 +65,17 @@ Pass 3 (Metadata & Synthesis):
 The mobile app uses the `omi_device` Dart SDK (`sdks/device/dart`) and `flutter_blue_plus` (monitoring `BluetoothDevice.connectionState` for mid-recording disconnects).
 
 ### GATT Characteristics
-- **Service UUID**: `19b10000-e8f2-537e-4f6c-d104768a1214`
-- **Audio Stream Characteristic (Notify)**: `19b10001-e8f2-537e-4f6c-d104768a1214`
-- **Codec Characteristic (Read)**: `19b10002-e8f2-537e-4f6c-d104768a1214`
+- **Audio Service UUID**: `19b10000-e8f2-537e-4f6c-d104768a1214`
+  - **Audio Stream Characteristic (Notify)**: `19b10001-e8f2-537e-4f6c-d104768a1214`
+  - **Codec Characteristic (Read)**: `19b10002-e8f2-537e-4f6c-d104768a1214`
+- **Button Service UUID**: `23ba7924-0000-1000-7450-346eac492e92`
+  - **Button Trigger Characteristic (Read/Notify)**: `23ba7925-0000-1000-7450-346eac492e92` — 8-byte payload (`int[2]`), bytes `0..3` little-endian `uint32`: `1` = Single Tap (start recording when unlocked), `2` = Double Tap (finish & diarize), `3` = Long Tap (firmware power-off, ignored), `5` = Release (ignored).
+- **Haptic Service UUID**: `cab1ab95-2ea5-4f4d-bb56-874b72cfc984`
+  - **Haptic Trigger Characteristic (Write)**: `cab1ab96-2ea5-4f4d-bb56-874b72cfc984` — 1-byte level (`1` = 20ms, `2` = 50ms, `3` = 500ms). Used to buzz 1× on Start and 2× on Finish.
 - **Battery Level (Read/Notify)**: `00002a19-0000-1000-8000-00805f9b34fb`
+
+### Native Android Lock-Screen Guard
+- `app/android/app/src/main/kotlin/com/ghchinoy/omi_pixel/MainActivity.kt` exposes `MethodChannel("com.ghchinoy.omi_pixel/device_state")` → `"isDeviceLocked"` (`KeyguardManager.isKeyguardLocked`) so `SessionManager.handleHardwareButtonEvent()` blocks starting new recordings from a locked device while still permitting double-tap Finish on an active recording.
 
 ### Codec Map
 
@@ -151,7 +164,7 @@ infra/
 - **Auth**: Public
 - **Response**: `200 OK`
   ```json
-  { "service": "omi-pixel", "status": "ok", "version": "0.4.1" }
+  { "service": "omi-pixel", "status": "ok", "version": "0.4.2" }
   ```
 
 ### Live Transcription WebSocket

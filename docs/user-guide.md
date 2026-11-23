@@ -144,12 +144,16 @@ make install-apk
    - Enter your deployed Cloud Run Service URL (or `http://localhost:8080` via `make adb-reverse`) and tap **Test Connection** (displays both App and Backend versions at the bottom of Settings).
    - Configure **Summary Generation Model** (`Gemini 4 Hydrogen (Default)` or `Gemini 3.8 Flash (Faster)`), **Appearance** (`Light` / `Auto` / `Dark`), **Live Transcription Mode** (`Verbatim` or `Smart`), and **Spoken Language**.
    - Under **Background Recording Reliability**, if battery optimization is restricted, tap **Allow** to grant unrestricted background execution on Pixel.
+   - Under **Omi Hardware Button Control**, keep **Start & Finish via Omi Button** enabled (default on) for hands-free control and tap **Test Haptic** when connected to feel the wearable buzz.
 2. **Connect Wearable**:
    - Tap **Scan for Omi Device** and connect your Omi DevKit or CV1. Once paired, Omi-Pixel remembers the device and automatically reconnects on future launches.
-3. **Quick-Switch Live Mode & Record**:
-   - **Long-press** **Start Conversation** to toggle directly between **Verbatim** and **Smart (Inline Self-Corrections)** without opening Settings.
-   - Tap **Start Conversation** to open **Live Recording**. A green **Audio active** pill confirms live decoded PCM bytes/packets from your wearable.
-   - While recording, an ongoing `"Omi Recording Active"` Android notification keeps BLE & WebSocket streaming alive when you switch apps or lock your screen. Tap the top-left `⌄` button (or press Back → **Minimize**) to return to `HomeScreen` while recording continues; tap the active **"Recording in Progress"** banner or the Android notification to return to `LiveScreen`.
+3. **Start & Control Recording (Screen or Hardware Button)**:
+   - **Quick-Switch Live Mode**: **Long-press** **Start Conversation** on `HomeScreen` to toggle directly between **Verbatim** and **Smart (Inline Self-Corrections)** without opening Settings.
+   - **Hands-Free Omi Hardware Button**:
+     - **Single tap** the Omi button while idle (and Pixel unlocked) to **start recording** — Omi confirms with **1× medium haptic buzz (50ms)**.
+     - **Double tap** the Omi button while recording to **finish & diarize in the background** — Omi confirms with **2× short haptic buzzes (20ms × 2)** (works even while your Pixel is locked or in another app).
+     - *(Note: holding the Omi button for 3+ seconds triggers Omi's firmware power-off; per Android background best practices, starting a new recording via the hardware button requires your Pixel to be unlocked and Omi-Pixel set to Unrestricted battery.)*
+   - **Live Screen & Minimize**: Tap **Start Conversation** (or single-tap Omi while in the app) to open **Live Recording**. A green **Audio active** pill confirms live decoded PCM bytes/packets. An ongoing `"Omi Recording Active"` Android notification keeps BLE & WebSocket streaming alive across app switches and lock screen. Tap the top-left `⌄` button (or press Back → **Minimize**) to return to `HomeScreen` while recording continues; tap the active **"Recording in Progress"** banner or the notification to return.
 4. **Non-Blocking Finish & Background Diarization**:
    - Tap **Finish Recording & Diarize**. The WAV is saved immediately to on-device storage and you return to `HomeScreen` right away while diarization runs in the background (`DIARIZING` badge).
    - If the phone is offline or an upload fails, the WAV stays safely queued on device and appears in an amber **Retry Upload** banner until uploaded successfully (expired Firebase tokens are refreshed automatically on HTTP `401`).
@@ -175,6 +179,10 @@ make install-apk
 
 ### Audio Recording Pauses When Screen Locks
 - Open **Settings** inside Omi Pixel and tap **Allow** under **Background Recording Reliability**, or go to Android **Settings** > **Apps** > **Omi Pixel** > **App battery usage** and set it to **Unrestricted**.
+
+### Omi Hardware Button Does Not Start Recording
+- Confirm **Settings** > **Omi Hardware Button Control** > **Start & Finish via Omi Button** is enabled and shows `Connected: Button Ready`.
+- Ensure your Pixel screen is **unlocked** (starting a new recording while locked is intentionally blocked for privacy & Android background compliance) and **App battery usage** is set to **Unrestricted**.
 
 ### Gradle Build Fails After Dependency Upgrade (`Unresolved reference`)
 - Run `make clean && make install-apk` to clear stale incremental Kotlin caches under `app/build/`.

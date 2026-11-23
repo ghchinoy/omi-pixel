@@ -30,7 +30,7 @@ digraph OmiPixelDataFlow {
     ];
 
     // Capture & Decode
-    step_mic [label="1. Omi Wearable Capture\n(16kHz Mono Audio • ForegroundService Active)", fillcolor="#1a2336", color="#60a5fa"];
+    step_mic [label="1. Omi Wearable Capture & Hardware Button\n(16kHz Audio • Single-Tap Start / Double-Tap Stop + Haptic Buzz)", fillcolor="#1a2336", color="#60a5fa"];
     step_ble [label="2. BLE GATT Stream\n(Opus Codec 20 / 21 + 3-Byte Header • Connection Monitored)", fillcolor="#1a2336"];
     step_decode [label="3. Flutter Audio Pipeline\n(Header Strip + Native libopus Decode -> 16kHz PCM)", fillcolor="#1e3a8a", color="#93c5fd"];
 

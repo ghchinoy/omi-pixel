@@ -1,6 +1,6 @@
 # 🎙️ Omi-Pixel
 
-[![Version](https://img.shields.io/badge/version-0.4.1-38bdf8?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.2-38bdf8?style=flat-square)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Google%20Pixel%20%7C%20Android-22c55e?style=flat-square)](#supported-hardware--audio-codecs)
 [![Backend](https://img.shields.io/badge/backend-Go%201.26%20%7C%20Cloud%20Run-0284c7?style=flat-square)](#architecture)
 [![AI](https://img.shields.io/badge/Vertex%20AI-Gemini%203.5%20Transcribe%20%2B%204%20Hydrogen-6366f1?style=flat-square)](#why-omi-pixel)
@@ -16,7 +16,7 @@ A standalone, self-hosted **Flutter companion app for Google Pixel** and **Go Cl
 - **⚡ Two-Pass Gemini 3.5 + 4 Hydrogen Pipeline**:
   - **Pass 1 (Real-Time UX)**: Streams 16kHz mono PCM over WebSocket (`Authorization: Bearer`) to `gemini-3.5-transcribe-live` for instant verbatim or Smart (inline self-correction) transcription while you speak.
   - **Pass 2 (Non-Blocking Diarization & Synthesis)**: Persists the 16kHz WAV locally on disk, uploads in the background to Cloud Storage, separates speakers (`Speaker 1`, `Speaker 2`, …) with word timestamps via `gemini-3.5-transcribe` (plus a parallel Smart-corrected transcript pass when recorded in Smart mode), and synthesizes titles (`gemini-3.5-flash-lite`) and takeaways (`gemini-4-hydrogen` default, or `gemini-3.8-flash` selectable in Settings).
-- **🔋 Resilient Pixel Companion**: Native `libopus` decoding (`Codec 20` & `Codec 21`), Android `ForegroundService` (`connectedDevice`) for lock-screen/app-switch recording, BLE auto-reconnect, crash-safe disk PCM/WAV upload queue, and Lustrous Light/Auto/Dark themes.
+- **🔋 Resilient Pixel Companion**: Native `libopus` decoding (`Codec 20` & `Codec 21`), Android `ForegroundService` (`connectedDevice`) for lock-screen/app-switch recording, **hands-free Omi hardware button start/finish with haptic buzz confirmation**, BLE auto-reconnect, crash-safe disk PCM/WAV upload queue, and Lustrous Light/Auto/Dark themes.
 - **⏯️ Tap-to-Seek Audio Review (Mobile & Web)**: Toggle between **Smart Transcript** and **Diarized Turns**, and tap any speaker turn card on your phone or in the Lustrous Web Review Dashboard to seek the 16kHz WAV player directly to that timestamp.
 
 > [!TIP]
@@ -61,7 +61,10 @@ Built for **[Omi](https://www.omi.me/)** open-source wearable hardware (and comp
 
 ## 🏗️ Architecture
 
-![Omi-Pixel Architecture](docs/diagrams/architecture.webp)
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/diagrams/architecture-light.webp">
+  <img src="docs/diagrams/architecture.webp" alt="Omi-Pixel Architecture">
+</picture>
 
 ---
 

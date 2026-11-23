@@ -45,7 +45,7 @@ digraph OmiPixelArchitecture {
         style="rounded";
         bgcolor="#111827";
 
-        ble_layer [label="BLE Client\n(omi_device + Auto-Reconnect\n& Disconnect Monitor)", fillcolor="#1a2336"];
+        ble_layer [label="BLE Client\n(omi_device + Auto-Reconnect\nButton & Haptic GATT)", fillcolor="#1a2336"];
         decoder [label="Opus Decoder\n(16kHz PCM / Codec 20 & 21)", fillcolor="#1a2336"];
         fgs [label="Android ForegroundService\n(connectedDevice + WakeLock)", fillcolor="#115e59", color="#5eead4"];
         auth_service [label="Firebase Auth\n(Google Sign-In + 401 Refresh)", fillcolor="#78350f", color="#fbbf24"];
@@ -95,7 +95,7 @@ digraph OmiPixelArchitecture {
         vertex_summary [label="Gemini 4 Hydrogen (Default)\n/ Gemini 3.8 Flash (Summary)", fillcolor="#2e1065", color="#ddd6fe"];
     }
 
-    omi_dev -> ble_layer [label="BLE GATT\n(Notify)", color="#60a5fa"];
+    omi_dev -> ble_layer [label="BLE GATT\n(Audio + Button + Haptic)", color="#60a5fa"];
     live_client -> live_proxy [label="WSS /api/live\n(Authorization: Bearer)", color="#60a5fa"];
     live_proxy -> vertex_live [label="Bidi WS\n(ADC Token)", color="#60a5fa"];
     vertex_live -> live_proxy [label="Live Tokens", color="#60a5fa"];

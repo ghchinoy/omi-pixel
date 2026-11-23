@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-23
+
+### Added
+- **Hands-Free Omi Hardware Button & Haptic Control**: Subscribed to the Omi BLE Button GATT service (`23ba7924` / `23ba7925`) and Haptic GATT service (`cab1ab95` / `cab1ab96`) with native Android `KeyguardManager.isKeyguardLocked` lock-screen protection (`MainActivity.kt`) and 1.5s debounce. Single-tap when idle (Pixel unlocked) starts recording with a 1× 50ms haptic buzz; double-tap while recording finishes & diarizes in the background with 2× 20ms buzzes (works even while locked). Added a permanent Settings toggle, **Test Haptic** button, live `deviceStream` updates, and clear Android background/unlock disclosure `[omi-pixel-8nh, omi-pixel-gka]`.
+- **Mineral Slate Light Mode Diagrams**: Added `docs/diagrams/architecture-light.dot` / `.webp` and `docs/diagrams/dataflow-light.dot` / `.webp` (plus updated dark diagrams for hardware button & haptic GATT) and wired adaptive `<picture>` `prefers-color-scheme` sources in `README.md` and `docs/developer-guide.md`.
+
+### Changed
+- **Updated User & Developer Guides**: Added hands-free Omi hardware button instructions, Android lock/background disclosure, troubleshooting, and Button/Haptic GATT protocol documentation to `docs/user-guide.md` and `docs/developer-guide.md`.
+
 ## [0.4.1] - 2026-11-23
 
 ### Added
@@ -110,7 +119,8 @@ _Initial release._
 - Audio playback cards with turn tap-to-seek synchronization on both mobile and web clients.
 - Infrastructure automation scripts (`infra/`) and top-level `Makefile`.
 
-[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.4...v0.4.0
 [0.3.4]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.3...v0.3.4

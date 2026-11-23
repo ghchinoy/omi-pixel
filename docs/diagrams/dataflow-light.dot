@@ -1,0 +1,66 @@
+digraph OmiPixelDataFlowLight {
+    graph [
+        rankdir=TB,
+        bgcolor="#f8fafc",
+        fontname="Helvetica,Arial,sans-serif",
+        fontsize=12,
+        pad="0.5",
+        nodesep="0.5",
+        ranksep="0.6"
+    ];
+
+    node [
+        shape=box,
+        style="filled,rounded",
+        fontname="Helvetica,Arial,sans-serif",
+        fontsize=11,
+        color="#cbd5e1",
+        fontcolor="#0f172a",
+        penwidth=1.5,
+        margin="0.2,0.12"
+    ];
+
+    edge [
+        fontname="Helvetica,Arial,sans-serif",
+        fontsize=9,
+        color="#64748b",
+        fontcolor="#1d4ed8",
+        penwidth=1.2,
+        arrowsize=0.8
+    ];
+
+    // Capture & Decode
+    step_mic [label="1. Omi Wearable Capture & Hardware Button\n(16kHz Audio • Single-Tap Start / Double-Tap Stop + Haptic Buzz)", fillcolor="#ffffff", color="#1d4ed8"];
+    step_ble [label="2. BLE GATT Stream\n(Opus Codec 20 / 21 + 3-Byte Header • Connection Monitored)", fillcolor="#ffffff"];
+    step_decode [label="3. Flutter Audio Pipeline\n(Header Strip + Native libopus Decode -> 16kHz PCM)", fillcolor="#dbeafe", color="#1d4ed8", fontcolor="#1e3a8a"];
+
+    // Pass 1: Live
+    step_live_ws [label="Pass 1: Live Proxy (/api/live, Authorization: Bearer)\n(Gemini 3.5 Transcribe Live • Verbatim or Smart Self-Corrections)", fillcolor="#dbeafe", color="#1d4ed8", fontcolor="#1e3a8a"];
+    step_live_ui [label="Live Screen UI\n(Real-Time Transcript + Audio Health Pill + Minimize/PopScope)", fillcolor="#ffffff", color="#1d4ed8"];
+
+    // Pass 2 & 3: Durable Disk + Background Diarization
+    step_disk_wav [label="Pass 2: Disk PCM Stream -> Durable WAV\n(RecordingFileStore + Pending Upload Queue • Instant Return to Home)", fillcolor="#d1fae5", color="#047857", fontcolor="#065f46"];
+    step_upload [label="Background HTTP Upload (401 Refresh Retry)\n(POST /api/sessions/{id}/audio?summary=true&summary_model=gemini-4-hydrogen&mode=...)", fillcolor="#e2e8f0"];
+    step_gcs [label="GCS Audio Persistence\n(gs://...-omi-pixel-audio/sessions/{id}/audio.wav)", fillcolor="#d1fae5", color="#047857", fontcolor="#065f46"];
+    step_diarize [label="Pass 2: Speaker Diarization + Parallel SMART Pass\n(Gemini 3.5 Transcribe • Word Timestamps & Self-Corrected Prose)", fillcolor="#e0e7ff", color="#1d4ed8", fontcolor="#1e1b4b"];
+    step_synthesis [label="Pass 3: Title & Synthesis\n(Gemini 3.5 Flash-Lite Title + Gemini 4 Hydrogen / 3.8 Flash Summary)", fillcolor="#ede9fe", color="#6d28d9", fontcolor="#5b21b6"];
+    step_store [label="Firestore Persistence (BulkWriter)\n(Session Metadata, Smart Transcript, Summary & Speaker Turns)", fillcolor="#d1fae5", color="#047857", fontcolor="#065f46"];
+    step_review [label="Lustrous Review & Playback Surfaces\n(Pixel App Light/Dark + @ghchinoy/lustrous-lit Web SPA • Smart/Diarized Toggle)", fillcolor="#ccfbf1", color="#0f766e", fontcolor="#134e4a"];
+
+    // Flow
+    step_mic -> step_ble;
+    step_ble -> step_decode;
+
+    // Pass 1
+    step_decode -> step_live_ws [label="~100ms PCM Chunks"];
+    step_live_ws -> step_live_ui [label="Live Transcript Events"];
+
+    // Pass 2 & 3
+    step_decode -> step_disk_wav [label="Crash-Safe Disk Stream"];
+    step_disk_wav -> step_upload [label="Detached Background Upload"];
+    step_upload -> step_gcs [label="Store 16kHz WAV"];
+    step_gcs -> step_diarize [label="fileUri: gs://..."];
+    step_diarize -> step_synthesis [label="Speaker Turns + Smart Text"];
+    step_synthesis -> step_store [label="Completed Session"];
+    step_store -> step_review [label="Synced JSON + Tap-to-Seek WAV"];
+}
