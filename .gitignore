@@ -21,6 +21,7 @@ app/pubspec.lock
 
 # ---- Native build artifacts ----
 app/android/.gradle/
+app/android/.kotlin/
 app/android/app/debug/
 app/android/app/profile/
 app/android/app/release/

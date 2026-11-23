@@ -26,20 +26,20 @@ A standalone, self-hosted **Flutter companion app for Google Pixel** and **Go Cl
 
 ## 📱 Mobile Companion & Web Review Showcase
 
-### Pixel Companion App (Dark OLED Material 3 UI)
+### Pixel Companion App (Lustrous Design System • Light / Auto / Dark)
 
-| 1. Connect & Auto-Reconnect | 2. Live Verbatim Stream | 3. Diarized Turns & Tap-to-Seek |
+| 1. Connect & Quick-Switch Mode | 2. Live Smart Stream & Audio Health | 3. Diarized Turns & Tap-to-Seek |
 | :---: | :---: | :---: |
 | <img src="docs/screenshots/mobile-home.webp" width="260" alt="Omi Pixel Home Screen"> | <img src="docs/screenshots/mobile-live.webp" width="260" alt="Omi Pixel Live Transcription"> | <img src="docs/screenshots/mobile-detail.webp" width="260" alt="Omi Pixel Diarized Detail"> |
-| *BLE status, battery level, & synced history* | *Sub-second `gemini-3.5-transcribe-live`* | *Speaker chips, Gemini 3.8 summary, & WAV seek* |
+| *BLE status, battery, background `DIARIZING`, & hold-to-switch mode* | *Sub-second `gemini-3.5-transcribe-live` + live PCM health pill* | *Lustrous speaker badges, Gemini 4 Hydrogen summary, & WAV seek* |
 
 <p align="center">
   <img src="docs/screenshots/live-demo.gif" width="320" alt="Omi Pixel Workflow Demo GIF">
 </p>
 
-### Built-In Web Review Dashboard (Hosted on Cloud Run)
+### Built-In Web Review Dashboard (`@ghchinoy/lustrous-lit` on Cloud Run)
 
-Every deployment serves a responsive, dark-mode Web Review SPA protected by Firebase Google Sign-In and your Firestore `authorized_users` allowlist:
+Every deployment serves a responsive **Lustrous Design System** Web Review SPA (Light / Auto / Dark themes, live search, modal delete) protected by Firebase Google Sign-In and your Firestore `authorized_users` allowlist:
 
 | Session History & Search | Synchronized WAV Player & Speaker Turns |
 | :---: | :---: |

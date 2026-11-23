@@ -405,7 +405,7 @@ const spaTemplate = `<!doctype html>
         '<lustrous-text id="sessions-count" variant="body-small" muted></lustrous-text>' +
         '</lustrous-flex>' +
         '<lustrous-flex align="center" gap="s">' +
-        '<lustrous-search-bar id="session-search" variant="outlined" size="s" placeholder="Search transcripts & summaries…" value="' + escapeHtml(currentSearchQuery) + '"></lustrous-search-bar>' +
+        '<lustrous-search-bar id="session-search" variant="outlined" size="s" placeholder="Search sessions…" value="' + escapeHtml(currentSearchQuery) + '"></lustrous-search-bar>' +
         '<lustrous-button id="refresh-list-btn" variant="outline" size="s" icon="refresh">Refresh</lustrous-button>' +
         '</lustrous-flex>' +
         '</lustrous-flex>' +
