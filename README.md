@@ -1,23 +1,23 @@
 # 🎙️ Omi-Pixel
 
-[![Version](https://img.shields.io/badge/version-0.4.0-38bdf8?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.1-38bdf8?style=flat-square)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Google%20Pixel%20%7C%20Android-22c55e?style=flat-square)](#supported-hardware--audio-codecs)
 [![Backend](https://img.shields.io/badge/backend-Go%201.26%20%7C%20Cloud%20Run-0284c7?style=flat-square)](#architecture)
 [![AI](https://img.shields.io/badge/Vertex%20AI-Gemini%203.5%20Transcribe%20%2B%204%20Hydrogen-6366f1?style=flat-square)](#why-omi-pixel)
 [![License: MIT](https://img.shields.io/badge/license-MIT-94a3b8?style=flat-square)](LICENSE)
 
-A standalone, self-hosted **Flutter companion app for Google Pixel** and **Go Cloud Run backend** for **Omi wearable hardware (DevKit & CV1)**—combining sub-second live speech streaming via **Gemini 3.5 Transcribe Live** with post-session multi-speaker diarization (**Gemini 3.5 Transcribe**), AI synthesis (**Gemini 4 Hydrogen**), and synchronized 16kHz WAV playback.
+A standalone, self-hosted **Flutter companion app for Google Pixel** and **Go Cloud Run backend** for **[Omi](https://www.omi.me/) wearable hardware (DevKit & CV1)**—combining sub-second live speech streaming via **Gemini 3.5 Transcribe Live** (Verbatim & Smart inline self-corrections) with non-blocking post-session multi-speaker diarization (**Gemini 3.5 Transcribe**), AI synthesis (**Gemini 4 Hydrogen**), and synchronized 16kHz WAV playback.
 
 ---
 
 ## ✨ Why Omi-Pixel?
 
 - **🔒 100% Private, Self-Hosted Cloud**: Your raw audio and transcripts live exclusively in *your* Google Cloud project (Firestore + Cloud Storage) behind your personal Google account allowlist—zero third-party SaaS telemetry.
-- **⚡ Two-Pass Gemini 3.5 Pipeline**:
-  - **Pass 1 (Real-Time UX)**: Streams 16kHz mono PCM over WebSocket to `gemini-3.5-transcribe-live` for instant verbatim or smart transcription while you speak.
-  - **Pass 2 (Diarized Truth & Synthesis)**: Uploads the full 16kHz session WAV to Cloud Storage, separates speakers (`Speaker 1`, `Speaker 2`, …) with word-level timestamps via `gemini-3.5-transcribe`, and synthesizes titles (`gemini-3.5-flash-lite`) and takeaways (`gemini-4-hydrogen` default, or `gemini-3.8-flash` selectable in Settings).
-- **🔋 Featherweight Pixel Companion**: Native `libopus` decoding (`Codec 20` & `Codec 21`), BLE auto-reconnect, and zero bloated cloud storage SDKs on the phone.
-- **⏯️ Tap-to-Seek Audio Review (Mobile & Web)**: Tap any speaker turn card on your phone or in the responsive Web Review Dashboard to seek the 16kHz WAV player directly to that timestamp.
+- **⚡ Two-Pass Gemini 3.5 + 4 Hydrogen Pipeline**:
+  - **Pass 1 (Real-Time UX)**: Streams 16kHz mono PCM over WebSocket (`Authorization: Bearer`) to `gemini-3.5-transcribe-live` for instant verbatim or Smart (inline self-correction) transcription while you speak.
+  - **Pass 2 (Non-Blocking Diarization & Synthesis)**: Persists the 16kHz WAV locally on disk, uploads in the background to Cloud Storage, separates speakers (`Speaker 1`, `Speaker 2`, …) with word timestamps via `gemini-3.5-transcribe` (plus a parallel Smart-corrected transcript pass when recorded in Smart mode), and synthesizes titles (`gemini-3.5-flash-lite`) and takeaways (`gemini-4-hydrogen` default, or `gemini-3.8-flash` selectable in Settings).
+- **🔋 Resilient Pixel Companion**: Native `libopus` decoding (`Codec 20` & `Codec 21`), Android `ForegroundService` (`connectedDevice`) for lock-screen/app-switch recording, BLE auto-reconnect, crash-safe disk PCM/WAV upload queue, and Lustrous Light/Auto/Dark themes.
+- **⏯️ Tap-to-Seek Audio Review (Mobile & Web)**: Toggle between **Smart Transcript** and **Diarized Turns**, and tap any speaker turn card on your phone or in the Lustrous Web Review Dashboard to seek the 16kHz WAV player directly to that timestamp.
 
 > [!TIP]
 > **Scales to $0 When Idle**: The Go backend deploys to Google Cloud Run with `--min-instances=0`. When you aren't actively recording or reviewing sessions, compute scales to zero (`$0.00/mo`), and Firestore + Cloud Storage usage typically stays well within the Google Cloud Free Tier.
@@ -49,10 +49,12 @@ Every deployment serves a responsive **Lustrous Design System** Web Review SPA (
 
 ## 🎧 Supported Hardware & Audio Codecs
 
+Built for **[Omi](https://www.omi.me/)** open-source wearable hardware (and compatible BLE audio devices):
+
 | Wearable Device | BLE Codec ID | Encoding | Frame Size | Sample Rate | Status |
 |---|---|---|---|---|---|
-| **Omi DevKit 1 / DevKit 2** | `20` (`0x14`) | Opus Standard | 10 ms (160 samples) | 16,000 Hz | ✅ Supported |
-| **Omi CV1 / Consumer** | `21` (`0x15`) | Opus FS320 | 20 ms (320 samples) | 16,000 Hz | ✅ Supported |
+| **[Omi](https://www.omi.me/) DevKit 1 / DevKit 2** | `20` (`0x14`) | Opus Standard | 10 ms (160 samples) | 16,000 Hz | ✅ Supported |
+| **[Omi](https://www.omi.me/) CV1 / Consumer** | `21` (`0x15`) | Opus FS320 | 20 ms (320 samples) | 16,000 Hz | ✅ Supported |
 | **Generic BLE Audio** | `0` / `1` | Linear PCM (16-bit / 8-bit) | Uncompressed | 16,000 / 8,000 Hz | ✅ Supported |
 
 ---

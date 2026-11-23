@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-23
+
+### Added
+- **Smart-Mode Corrected Transcript Persistence & View Switcher**: Added `transcription_mode` and `smart_transcript` to `Session` (Firestore + JSON API + Flutter model), launched a parallel standalone batch `SMART` pass (`diarization=false, wordTimestamp=false, mode="SMART"`) alongside batch diarization when recorded in Smart mode (feeding corrected wording into title & `gemini-4-hydrogen` summaries), and added cobalt **`SMART`** badges plus a **Smart Transcript** ↔ **Diarized Turns** segmented view switcher in both the Web Review SPA and Flutter `SessionDetailScreen` `[omi-pixel-dcy, omi-pixel-60o]`.
+- **Refreshed Lustrous Dark & Light Mode Visuals**: Captured updated v0.4 Obsidian Slate dark and Mineral Slate light `.webp` screenshots for the Web Review SPA and Pixel app (plus regenerated `live-demo.gif`) and wired adaptive `<picture>` `prefers-color-scheme` sources in `README.md` `[omi-pixel-5nm, omi-pixel-8np]`.
+
+### Changed
+- **Documentation & Omi Hardware Links**: Updated `docs/user-guide.md` and `docs/developer-guide.md` for v0.4+ architecture (ForegroundService, disk PCM/WAV queue, non-blocking diarization, Bearer-header `/api/live`, orphan recovery, Smart mode, and Lustrous UI), added links to [Omi](https://www.omi.me/) in `README.md`, and shortened the Web search placeholder to `"Search sessions…"` `[omi-pixel-fso, omi-pixel-5d6]`.
+
 ## [0.4.0] - 2026-11-23
 
 ### Added
@@ -101,7 +110,8 @@ _Initial release._
 - Audio playback cards with turn tap-to-seek synchronization on both mobile and web clients.
 - Infrastructure automation scripts (`infra/`) and top-level `Makefile`.
 
-[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.4...v0.4.0
 [0.3.4]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.2...v0.3.3
