@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 
 import '../services/auth_service.dart';
+import '../services/ble_service.dart';
 import '../services/settings_service.dart';
 import '../theme/lustrous_theme.dart';
 import 'login_screen.dart';
@@ -30,6 +33,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _connectionSuccess = false;
   String? _backendVersion;
   bool? _ignoringBatteryOptimizations;
+  StreamSubscription<OmiButtonEvent>? _buttonEventSub;
+  List<OmiButtonEvent> _buttonEvents = [];
 
   @override
   void initState() {
@@ -41,6 +46,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _selectedSummaryModel = s.summaryModel;
     _selectedThemeMode = s.themeModePreference;
     _generateSummary = s.generateSummary;
+    _buttonEvents = List<OmiButtonEvent>.from(BleService.instance.recentButtonEvents);
+    _buttonEventSub = BleService.instance.buttonEventStream.listen((_) {
+      if (!mounted) return;
+      setState(() {
+        _buttonEvents = List<OmiButtonEvent>.from(BleService.instance.recentButtonEvents);
+      });
+    });
     if (s.cloudRunUrl.isNotEmpty) {
       _fetchBackendVersion(s.cloudRunUrl);
     }
@@ -85,6 +97,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
+    _buttonEventSub?.cancel();
     _cloudRunUrlController.dispose();
     super.dispose();
   }
@@ -444,6 +457,97 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         onPressed: _requestBatteryOptimizationExemption,
                         child: const Text('Allow'),
                       ),
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+          if (BleService.instance.currentDevice?.isConnected == true) ...[
+            Text(
+              'Omi Hardware Button & Haptic Probe',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Button GATT: ${BleService.instance.hasButtonCharacteristic ? "Subscribed" : "Not found"}\n'
+                            'Haptic GATT: ${BleService.instance.hasHapticCharacteristic ? "Available" : "Not found"}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              height: 1.5,
+                            ),
+                          ),
+                        ),
+                        if (BleService.instance.hasHapticCharacteristic)
+                          FilledButton.tonalIcon(
+                            onPressed: () async {
+                              final ok = await BleService.instance.playHaptic(level: 2);
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(ok ? 'Haptic pulse sent (50ms)' : 'Haptic write failed'),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.vibration, size: 16),
+                            label: const Text('Buzz Omi'),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Recent Button Events (${_buttonEvents.length})',
+                          style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        if (_buttonEvents.isNotEmpty)
+                          TextButton(
+                            onPressed: () {
+                              BleService.instance.clearRecentButtonEvents();
+                              setState(() => _buttonEvents = []);
+                            },
+                            child: const Text('Clear'),
+                          ),
+                      ],
+                    ),
+                    if (_buttonEvents.isEmpty)
+                      Text(
+                        'Press the Omi button (single tap or double tap) here or while switched to another app, then check this log.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      )
+                    else
+                      ..._buttonEvents.take(5).map((e) {
+                        final ts = DateFormat('HH:mm:ss').format(e.timestamp);
+                        final state = e.lifecycleState?.name ?? 'unknown';
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: Text(
+                            '$ts • ${e.type.name} (${e.rawCode}) • app=$state • [${e.hexBytes}]',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontFamily: 'monospace',
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        );
+                      }),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 24),

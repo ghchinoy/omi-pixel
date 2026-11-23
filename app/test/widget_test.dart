@@ -14,6 +14,7 @@ import 'package:omi_pixel/models/segment.dart';
 import 'package:omi_pixel/models/session.dart';
 import 'package:omi_pixel/services/api_client.dart';
 import 'package:omi_pixel/services/audio_decoder.dart';
+import 'package:omi_pixel/services/ble_service.dart';
 import 'package:omi_pixel/services/gemini_live_service.dart';
 import 'package:omi_pixel/services/recording_file_store.dart';
 import 'package:omi_pixel/services/session_manager.dart';
@@ -143,6 +144,29 @@ void main() {
       expect(uri.queryParameters['mode'], 'smart');
       expect(uri.queryParameters['session'], 'sess_abc');
       expect(uri.queryParameters.containsKey('access_token'), isFalse);
+    });
+
+    test('OmiButtonEvent.parsePayload decodes little-endian uint32 event codes', () {
+      final single = OmiButtonEvent.parsePayload(
+        [1, 0, 0, 0, 0, 0, 0, 0],
+        lifecycleState: AppLifecycleState.resumed,
+      );
+      expect(single, isNotNull);
+      expect(single!.rawCode, 1);
+      expect(single.type, OmiButtonEventType.singleTap);
+      expect(single.lifecycleState, AppLifecycleState.resumed);
+      expect(single.hexBytes, '01 00 00 00 00 00 00 00');
+
+      final dbl = OmiButtonEvent.parsePayload([2, 0, 0, 0, 0, 0, 0, 0]);
+      expect(dbl?.type, OmiButtonEventType.doubleTap);
+
+      final lng = OmiButtonEvent.parsePayload([3, 0, 0, 0, 0, 0, 0, 0]);
+      expect(lng?.type, OmiButtonEventType.longTap);
+
+      final rel = OmiButtonEvent.parsePayload([5, 0, 0, 0, 0, 0, 0, 0]);
+      expect(rel?.type, OmiButtonEventType.release);
+
+      expect(OmiButtonEvent.parsePayload([1, 0]), isNull);
     });
   });
 

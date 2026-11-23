@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:omi_device/omi_device.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -9,12 +10,71 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/device.dart';
 import 'audio_decoder.dart';
 
+/// Event types emitted by Omi hardware button GATT characteristic (`23ba7925-...`).
+enum OmiButtonEventType {
+  singleTap,
+  doubleTap,
+  longTap,
+  press,
+  release,
+  unknown,
+}
+
+/// Decoded button notification emitted by an Omi wearable device.
+class OmiButtonEvent {
+  final int rawCode;
+  final OmiButtonEventType type;
+  final List<int> rawBytes;
+  final DateTime timestamp;
+  final AppLifecycleState? lifecycleState;
+
+  const OmiButtonEvent({
+    required this.rawCode,
+    required this.type,
+    required this.rawBytes,
+    required this.timestamp,
+    this.lifecycleState,
+  });
+
+  String get hexBytes =>
+      rawBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+
+  /// Parses an Omi firmware `int final_button_state[2]` BLE notification payload.
+  /// Bytes 0..3 encode the event code as a 32-bit little-endian unsigned integer.
+  static OmiButtonEvent? parsePayload(
+    List<int> bytes, {
+    DateTime? timestamp,
+    AppLifecycleState? lifecycleState,
+  }) {
+    if (bytes.length < 4) return null;
+    final data = ByteData.sublistView(Uint8List.fromList(bytes.sublist(0, 4)));
+    final code = data.getUint32(0, Endian.little);
+    final type = switch (code) {
+      1 => OmiButtonEventType.singleTap,
+      2 => OmiButtonEventType.doubleTap,
+      3 => OmiButtonEventType.longTap,
+      4 => OmiButtonEventType.press,
+      5 => OmiButtonEventType.release,
+      _ => OmiButtonEventType.unknown,
+    };
+    return OmiButtonEvent(
+      rawCode: code,
+      type: type,
+      rawBytes: List<int>.unmodifiable(bytes),
+      timestamp: timestamp ?? DateTime.now(),
+      lifecycleState: lifecycleState,
+    );
+  }
+}
+
 class BleService {
   static final BleService instance = BleService._();
   BleService._();
 
   static const String _keyLastDeviceId = 'last_ble_device_id';
   static const String _keyLastDeviceName = 'last_ble_device_name';
+  static const String hapticServiceUuid = 'cab1ab95-2ea5-4f4d-bb56-874b72cfc984';
+  static const String hapticCharacteristicUuid = 'cab1ab96-2ea5-4f4d-bb56-874b72cfc984';
 
   final OmiBleClient _bleClient = createOmiBleClient();
 
@@ -30,11 +90,28 @@ class BleService {
   final _reconnectingController = StreamController<bool>.broadcast();
   Stream<bool> get reconnectingStream => _reconnectingController.stream;
 
+  final _buttonEventController = StreamController<OmiButtonEvent>.broadcast();
+  Stream<OmiButtonEvent> get buttonEventStream => _buttonEventController.stream;
+
+  final List<OmiButtonEvent> _recentButtonEvents = [];
+  List<OmiButtonEvent> get recentButtonEvents => List.unmodifiable(_recentButtonEvents);
+
+  bool _hasButtonCharacteristic = false;
+  bool get hasButtonCharacteristic => _hasButtonCharacteristic;
+
+  BluetoothCharacteristic? _hapticCharacteristic;
+  bool get hasHapticCharacteristic => _hapticCharacteristic != null;
+
   Stream<bool> get scanningStream => FlutterBluePlus.isScanning;
   bool get isScanning => FlutterBluePlus.isScanningNow;
 
   StreamSubscription? _audioSub;
   StreamSubscription<BluetoothConnectionState>? _connectionStateSub;
+  StreamSubscription<List<int>>? _buttonSub;
+
+  void clearRecentButtonEvents() {
+    _recentButtonEvents.clear();
+  }
 
   Future<bool> requestPermissions() async {
     if (Platform.isAndroid) {
@@ -112,6 +189,9 @@ class BleService {
         }
       });
 
+      // Attach Omi hardware button listener & haptic characteristic (best-effort)
+      await _attachButtonAndHapticCharacteristics(fbpDevice);
+
       // Persist last connected device
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -128,6 +208,10 @@ class BleService {
   }
 
   Future<void> disconnect() async {
+    await _buttonSub?.cancel();
+    _buttonSub = null;
+    _hasButtonCharacteristic = false;
+    _hapticCharacteristic = null;
     await _connectionStateSub?.cancel();
     _connectionStateSub = null;
     await _audioSub?.cancel();
@@ -198,6 +282,95 @@ class BleService {
       return battery;
     } catch (_) {
       return -1;
+    }
+  }
+
+  /// Triggers tactile haptic feedback on Omi hardware (level 1=20ms, 2=50ms, 3=500ms).
+  Future<bool> playHaptic({int level = 2}) async {
+    final char = _hapticCharacteristic;
+    if (char == null) return false;
+    try {
+      await char.write([level & 0xFF]);
+      debugPrint('[BleService] Triggered Omi haptic (level=$level)');
+      return true;
+    } catch (e) {
+      debugPrint('[BleService] Failed triggering Omi haptic: $e');
+      return false;
+    }
+  }
+
+  BluetoothCharacteristic? _findCharacteristic(
+    List<BluetoothService> services,
+    String serviceUuid,
+    String charUuid,
+  ) {
+    final sTarget = serviceUuid.toLowerCase();
+    final cTarget = charUuid.toLowerCase();
+    for (final s in services) {
+      if (s.uuid.str128.toLowerCase() != sTarget && s.uuid.str.toLowerCase() != sTarget) {
+        continue;
+      }
+      for (final c in s.characteristics) {
+        if (c.uuid.str128.toLowerCase() == cTarget || c.uuid.str.toLowerCase() == cTarget) {
+          return c;
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<void> _attachButtonAndHapticCharacteristics(BluetoothDevice fbpDevice) async {
+    await _buttonSub?.cancel();
+    _buttonSub = null;
+    _hasButtonCharacteristic = false;
+    _hapticCharacteristic = null;
+
+    try {
+      var services = fbpDevice.servicesList;
+      if (services.isEmpty) {
+        services = await fbpDevice.discoverServices();
+      }
+
+      _hapticCharacteristic = _findCharacteristic(
+        services,
+        hapticServiceUuid,
+        hapticCharacteristicUuid,
+      );
+      debugPrint('[BleService] Haptic characteristic present: ${_hapticCharacteristic != null}');
+
+      final btnChar = _findCharacteristic(
+        services,
+        buttonServiceUuid,
+        buttonTriggerCharacteristicUuid,
+      );
+      if (btnChar == null) {
+        debugPrint('[BleService] Button characteristic ($buttonTriggerCharacteristicUuid) not found.');
+        return;
+      }
+
+      _hasButtonCharacteristic = true;
+      await btnChar.setNotifyValue(true);
+      _buttonSub = btnChar.onValueReceived.listen((value) {
+        final lifecycle = WidgetsBinding.instance.lifecycleState;
+        final event = OmiButtonEvent.parsePayload(value, lifecycleState: lifecycle);
+        if (event == null) {
+          debugPrint('[OmiButtonSpike] Ignored short button payload: $value');
+          return;
+        }
+        debugPrint(
+          '[OmiButtonSpike] code=${event.rawCode} (${event.type.name}) '
+          'lifecycle=${event.lifecycleState?.name ?? "unknown"} hex=[${event.hexBytes}]',
+        );
+        _recentButtonEvents.insert(0, event);
+        if (_recentButtonEvents.length > 10) {
+          _recentButtonEvents.removeLast();
+        }
+        _buttonEventController.add(event);
+      });
+      fbpDevice.cancelWhenDisconnected(_buttonSub!);
+      debugPrint('[BleService] Subscribed to Omi button characteristic ($buttonTriggerCharacteristicUuid).');
+    } catch (e) {
+      debugPrint('[BleService] Error attaching button/haptic characteristics: $e');
     }
   }
 }
