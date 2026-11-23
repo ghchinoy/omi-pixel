@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-11-23
+
+### Added
+- **Non-Blocking Background Diarization & Auto-Refresh**: Stopping a recording now finalizes the local WAV and returns immediately to `HomeScreen` while audio uploads and diarizes in the background (keeping the Android foreground notification active until complete). Added live `DIARIZING` badges, completion SnackBar with `"View"` action, auto-polling in `SessionDetailScreen` and the Web Review SPA, optional `?async=true` (`202 Accepted` with graceful shutdown drain) on `POST /api/sessions/{id}/audio`, and `POST /api/sessions/{id}/reprocess` for retrying stored GCS audio `[omi-pixel-6hb.2, omi-pixel-6hb.3]`.
+- **Disk-Backed PCM/WAV Persistence & Retryable Upload Queue**: Added `RecordingFileStore` to stream decoded PCM chunks directly to `<ApplicationDocumentsDirectory>/omi_recordings` (removing unbounded RAM buffering), finalize durable WAVs on stop, recover orphaned `.pcm` files on startup, keep WAVs on disk until HTTP `200`/`202`, and expose one-tap **Retry Upload** banners in `HomeScreen` and `SessionDetailScreen` `[omi_pixel-2er]`.
+- **Active vs. Idle Recording UX, Minimize Flow & Battery Check**: Updated `HomeScreen` to show an active **"Recording in Progress"** banner with live timer and **"Return to Live Recording"** CTA while recording, added a **Minimize (keep recording)** flow in `LiveScreen`, wired Android notification taps directly back to `LiveScreen` (`/live`), and added an Android battery-optimization status check in `SettingsScreen` `[omi-pixel-6hb.1]`.
+
+### Fixed
+- **LiveScreen Back Guard, BLE Disconnect Detection & 0-Audio Finalization**: Wrapped `LiveScreen` in `PopScope(canPop: false)` with a 3-way dialog (`Stay` / `Minimize` / `Finish & Diarize`), added `BluetoothDevice.connectionState` disconnect monitoring + live PCM audio health/stall pill in `LiveScreen`, and updated 0-audio `stopRecording()` to persist live segments (`completed`) or mark `failed` via `POST /api/sessions/{id}/segments` so Firestore never stays stuck in `status='recording'` `[omi_pixel-a85]`.
+- **Expired Token Upload Recovery**: Added automatic single retry with `forceRefresh: true` on HTTP `401` in `ApiClient.uploadAudioDetailed()` so expired Firebase ID tokens do not cause audio loss after long recordings `[omi_pixel-2er]`.
+
 ## [0.3.2] - 2026-11-23
 
 ### Fixed
@@ -65,7 +76,8 @@ _Initial release._
 - Audio playback cards with turn tap-to-seek synchronization on both mobile and web clients.
 - Infrastructure automation scripts (`infra/`) and top-level `Makefile`.
 
-[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/ghchinoy/omi-pixel/compare/v0.2.0...v0.3.0
