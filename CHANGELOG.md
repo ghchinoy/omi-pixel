@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-23
+
+### Added
+- **Lustrous Web Review SPA (`@ghchinoy/lustrous-lit@0.2.0`)**: Migrated `service/web/templates.go` to the Lustrous Design System via pinned CDN (`jsDelivr` CSS + bundled OFL-1.1 Google Sans Flex/Code fonts + single `esm.sh` root bundle), featuring a persisted Light/Auto/Dark `<lustrous-segmented-control>` theme switcher, focus-preserving `<lustrous-search-bar>` session filter, `<lustrous-pressable>` cards, semantic `<lustrous-badge>` statuses, 6 WCAG 2.1 AA dual-theme categorical speaker pills, `<lustrous-banner>` processing/summary/retry states, modal `<lustrous-dialog>` delete confirmation, and `<lustrous-snackbar>` toasts `[omi-pixel-0xm.1, omi-pixel-0xm.2]`.
+- **Lustrous Flutter Theme & Light/Auto/Dark Mode**: Added `app/lib/theme/lustrous_theme.dart` (`LustrousTheme.light()` Mineral Slate, `LustrousTheme.dark()` Obsidian Slate, and `LustrousColors` `ThemeExtension` with semantic containers and 6 WCAG-AA speaker color pairs), a live Light/Auto/Dark switcher in `SettingsScreen`, and replaced hardcoded colors across all 5 mobile screens `[omi-pixel-0xm.3, omi-pixel-0xm.4]`.
+- **Long-Press Verbatim ↔ Smart Mode Switcher**: Long-pressing `"Start Conversation"` on `HomeScreen` now opens a bottom sheet to quick-switch between **Verbatim** and **Smart (Inline Self-Corrections)** with haptic feedback and a live mode indicator beneath the CTA `[omi-pixel-0xm.5]`.
+
+### Changed
+- **Refreshed Architecture & Dataflow Diagrams**: Updated `docs/diagrams/architecture.dot` and `docs/diagrams/dataflow.dot` with the Lustrous Obsidian Slate palette and v0.4.0 pipeline (ForegroundService, disk PCM/WAV upload queue, Bearer-header `/api/live`, orphan PCM recovery, Gemini 4 Hydrogen default summary, and Lustrous Web/Mobile UI) and regenerated `.webp` assets `[omi-pixel-0wl]`.
+
+### Fixed
+- **Narrow-Screen HomeScreen Overflow**: Wrapped and shortened the Start Conversation mode caption (`Mode: Verbatim/Smart • Hold to switch`), constrained HomeScreen header/device rows with ellipsis, and made the live mode bottom sheet scrollable for zero overflow at 360dp width `[omi-pixel-qhm]`.
+
 ## [0.3.4] - 2026-11-23
 
 ### Added
@@ -88,7 +101,8 @@ _Initial release._
 - Audio playback cards with turn tap-to-seek synchronization on both mobile and web clients.
 - Infrastructure automation scripts (`infra/`) and top-level `Makefile`.
 
-[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.4...v0.4.0
 [0.3.4]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.1...v0.3.2
