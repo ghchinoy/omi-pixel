@@ -347,10 +347,15 @@ void main() {
       expect(find.text('Start Conversation'), findsNothing);
     });
 
-    testWidgets('Long-pressing Start Conversation switches Verbatim to Smart mode', (WidgetTester tester) async {
+    testWidgets('Long-pressing Start Conversation switches Verbatim to Smart mode without narrow-screen overflow', (WidgetTester tester) async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.instance.init();
       SessionManager.instance.setRecordingStateForTesting(false);
+
+      tester.view.physicalSize = const Size(360, 780);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -361,7 +366,7 @@ void main() {
       await tester.pump();
 
       expect(SettingsService.instance.liveTranscriptionMode, 'verbatim');
-      expect(find.textContaining('Mode: Verbatim'), findsOneWidget);
+      expect(find.text('Mode: Verbatim • Hold to switch'), findsOneWidget);
 
       await tester.longPress(find.text('Start Conversation'));
       await tester.pumpAndSettle();
@@ -373,7 +378,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(SettingsService.instance.liveTranscriptionMode, 'smart');
-      expect(find.textContaining('Mode: Smart (Self-Corrections)'), findsOneWidget);
+      expect(find.text('Mode: Smart • Hold to switch'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     test('finalizeStoppedSession with 0 audio and live transcript saves completed segments to backend', () async {

@@ -165,9 +165,12 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Recent Conversations',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                Expanded(
+                  child: Text(
+                    'Recent Conversations',
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.refresh, size: 20),
@@ -260,27 +263,32 @@ class _HomeScreenState extends State<HomeScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            if (isReconnecting && !isConnected)
-                              const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            else
-                              Icon(
-                                isConnected ? Icons.bluetooth_connected : Icons.bluetooth,
-                                color: isConnected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                        Expanded(
+                          child: Row(
+                            children: [
+                              if (isReconnecting && !isConnected)
+                                const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              else
+                                Icon(
+                                  isConnected ? Icons.bluetooth_connected : Icons.bluetooth,
+                                  color: isConnected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                                ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  isConnected
+                                      ? device.name
+                                      : (isReconnecting ? 'Reconnecting to Omi...' : 'No Device Connected'),
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                ),
                               ),
-                            const SizedBox(width: 8),
-                            Text(
-                              isConnected
-                                  ? device.name
-                                  : (isReconnecting ? 'Reconnecting to Omi...' : 'No Device Connected'),
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                         if (isConnected && device.batteryLevel >= 0)
                           Container(
@@ -355,13 +363,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
         final theme = Theme.of(ctx);
         return SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -572,7 +581,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return ValueListenableBuilder<String>(
           valueListenable: SettingsService.instance.liveModeNotifier,
           builder: (context, liveMode, _) {
-            final modeLabel = liveMode == 'smart' ? 'Smart (Self-Corrections)' : 'Verbatim';
+            final modeLabel = liveMode == 'smart' ? 'Smart' : 'Verbatim';
             return Column(
               children: [
                 SizedBox(
@@ -594,23 +603,30 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      liveMode == 'smart' ? Icons.auto_fix_high : Icons.record_voice_over,
-                      size: 13,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      'Mode: $modeLabel • Long-press button to switch',
-                      style: theme.textTheme.bodySmall?.copyWith(
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        liveMode == 'smart' ? Icons.auto_fix_high : Icons.record_voice_over,
+                        size: 13,
                         color: theme.colorScheme.onSurfaceVariant,
-                        fontSize: 12,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          'Mode: $modeLabel • Hold to switch',
+                          textAlign: TextAlign.center,
+                          softWrap: true,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             );
