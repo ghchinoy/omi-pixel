@@ -60,28 +60,44 @@ make run-app
 
 ### Makefile Target Reference
 
-| Target | Description |
-|---|---|
-| `make run-local` | Runs Go backend locally with Firebase Auth and Vertex AI ADC |
-| `make run-local-noauth` | Runs Go backend with `AUTH_DISABLED=true` (offline local testing) |
-| `make run-app` | Runs Flutter companion app on connected Android device |
-| `make adb-reverse` | Forwards `tcp:8080` from Pixel to your development machine |
-| `make configure-firebase` | Generates platform Firebase configs via `flutterfire configure` and auto-syncs keys to `infra/.env` |
-| `make sync-firebase-env` | Copies Firebase Web & Android keys from `app/lib/firebase_options.dart` into `infra/.env` |
-| `make authorize EMAIL=...` | Adds user email to Firestore `authorized_users` allowlist (`ADMIN=true` optional) |
-| `make deauthorize EMAIL=...` | Removes user email from Firestore allowlist |
-| `make setup` | Provisions GCP APIs, dedicated Service Account, Firestore DB, and GCS bucket |
-| `make preflight` | Executes automated pre-deployment validation checks |
-| `make deploy` | Builds and deploys Go backend container to Google Cloud Run |
-| `make postflight` | Verifies deployed Cloud Run health, Firestore, and GCS bindings |
-| `make release` | Runs full deployment pipeline: `preflight` -> `deploy` -> `postflight` |
-| `make test` | Runs unit tests across Go backend and Flutter app |
-| `make analyze` | Runs static analysis and linting checks on Go (`go vet`) and Flutter (`flutter analyze`) |
-| `make doctor-app` | Checks local Flutter, ADB, Firebase, and signing readiness for mobile builds |
-| `make build-apk` | Builds release Android APK (`app/build/app/outputs/flutter-apk/app-release.apk`) |
-| `make install-apk` | Builds release APK and installs onto connected Pixel via ADB |
-| `make clean` | Cleans Flutter/Gradle build caches (recommended after plugin upgrades) |
-| `make icons` | Regenerates all Android and iOS launcher icons |
+Run `make help` at any time for a summary. All targets automatically load variables from `infra/.env` when present (and any variable can be overridden on the command line, e.g. `PORT=9090 make run-local`).
+
+#### Local Development
+| Target | Parameters / Env Vars | Description |
+|---|---|---|
+| `make help` | — | Prints grouped CLI help for all targets |
+| `make run-local` | `PORT=8080`, `GOOGLE_CLOUD_PROJECT`, `FIRESTORE_DATABASE`, `GCS_BUCKET`, `FIREBASE_*` | Starts Go backend locally with Firebase Auth + Vertex AI ADC active |
+| `make run-local-noauth` | `PORT=8080`, `GOOGLE_CLOUD_PROJECT` | Starts Go backend locally with `AUTH_DISABLED=true` for offline/zero-config testing |
+| `make adb-reverse` | `PORT=8080` | Forwards `tcp:<PORT>` from a USB-connected Pixel to your local dev server |
+| `make run-app` | `FIREBASE_ANDROID_*` (from `infra/.env`) | Launches the Flutter companion app in debug mode on a connected Android device |
+| `make configure-firebase` | `GOOGLE_CLOUD_PROJECT` | Runs `flutterfire configure` inside `app/` and auto-syncs keys to `infra/.env` |
+| `make sync-firebase-env` | — | Extracts Web & Android keys from `app/lib/firebase_options.dart` into `infra/.env` |
+
+#### User Authorization
+| Target | Parameters / Env Vars | Description |
+|---|---|---|
+| `make authorize` | `EMAIL=user@domain.com` `[ADMIN=true]` | Adds an email to Firestore `authorized_users` allowlist (example: `make authorize EMAIL=you@gmail.com ADMIN=true`) |
+| `make deauthorize` | `EMAIL=user@domain.com` | Removes an email from Firestore `authorized_users` allowlist |
+
+#### Cloud Infrastructure & Deployment
+| Target | Parameters / Env Vars | Description |
+|---|---|---|
+| `make setup` | `infra/.env` (`GOOGLE_CLOUD_PROJECT`, `GCP_REGION`, `FIRESTORE_DATABASE`, `GCS_BUCKET`) | Enables GCP APIs, creates `sa-omi-pixel` SA + IAM bindings, Firestore DB, GCS bucket, Artifact Registry, and seeds active user |
+| `make preflight` | `infra/.env` | Read-only pre-deploy check: CLI tools, GCP project, APIs (`cloudbuild`, `aiplatform`, etc.), Firestore, GCS, Firebase Web keys, allowlist, SA |
+| `make deploy` | `infra/.env` (`SUMMARY_MODEL`, `FIREBASE_*`, etc.) | Builds container from `service/` and deploys to Cloud Run (`--min-instances=0`) |
+| `make postflight` | `infra/.env` (or `./infra/postflight.sh --url https://...`) | Verifies live `/api/health`, `/`, `401` auth enforcement, Firestore, and GCS bindings |
+| `make release` | `infra/.env` | Runs the full deployment pipeline in sequence: `preflight` → `deploy` → `postflight` |
+
+#### Quality, Build & Device Installation
+| Target | Parameters / Env Vars | Description |
+|---|---|---|
+| `make test` | — | Runs Go backend unit tests (`go test -v ./...`) and Flutter unit/widget tests (`flutter test`) |
+| `make analyze` | — | Runs Go static analysis (`go vet ./...`) and Flutter analyzer (`flutter analyze`) |
+| `make doctor-app` | — | Verifies Flutter, ADB, connected Pixel devices, Firebase Android config, and signing readiness |
+| `make build-apk` | `FIREBASE_ANDROID_*` (optional) | Builds standalone release Android APK (`app/build/app/outputs/flutter-apk/app-release.apk`) |
+| `make install-apk` | `FIREBASE_ANDROID_*` (optional) | Runs `build-apk` and installs the release APK onto a connected Pixel via `adb install -r` |
+| `make icons` | — | Regenerates Android/iOS/Web/macOS app launcher icons from `app/assets/icon/icon.png` |
+| `make clean` | — | Runs `flutter clean` (clearing Gradle/Kotlin caches) and removes local Go binaries |
 
 ---
 
@@ -128,18 +144,23 @@ make run-app
 - **Firebase vs. Offline Mode**: `app/android/app/build.gradle.kts` conditionally applies the Google Services plugin only when `app/android/app/google-services.json` exists, so fresh clones can build and test offline (`make run-local-noauth`) immediately, then run `make configure-firebase` when ready for Google Sign-In.
 - **Custom Release Signing / Bundle ID (Optional)**: Add `app/android/key.properties` to sign release APKs with your own keystore (otherwise debug signing is used automatically for personal sideloading), or pass `-PapplicationId=com.yourorg.omi_pixel` if using a custom Firebase package name.
 
-### Option A: Release APK Sideload (Recommended)
+### Option A: Pre-Built Universal APK (Zero Local Flutter Install)
+1. Download `omi-pixel-vX.Y.Z.apk` from [GitHub Releases](https://github.com/ghchinoy/omi-pixel/releases) (or trigger the **CI & Release APK** GitHub Actions workflow on your fork).
+2. Sideload onto your Pixel (`adb install -r omi-pixel-vX.Y.Z.apk` or open the `.apk` directly on-device).
+3. Open **Settings**, paste your deployed Cloud Run Service URL, and tap **Test Connection** — the app automatically fetches your project's public Firebase configuration from `GET /api/client-config`, initializes Firebase at runtime, and signs in with Google via Chrome Custom Tabs (zero Android SHA-1 setup required).
+
+### Option B: Build & Sideload Locally (`make install-apk`)
 To install the standalone release build onto your Pixel over USB:
 ```bash
 make install-apk
 ```
 *(After Flutter/Firebase plugin upgrades, run `make clean && make install-apk` to avoid stale Gradle Kotlin incremental caches.)*
 
-### Option B: USB Tether (Live Debug Run)
+### Option C: USB Tether (Live Debug Run)
 1. Connect your Pixel via USB with USB Debugging enabled.
 2. Run `make run-app`.
 
-### Option C: Wireless ADB (Untethered)
+### Option D: Wireless ADB (Untethered)
 1. On your Pixel: **Settings** > **Developer options** > **Wireless debugging** > **Pair device with pairing code**.
 2. On your computer:
    ```bash

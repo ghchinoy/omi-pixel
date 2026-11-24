@@ -61,6 +61,7 @@ help:
 	@echo "  make build-apk         Build release Android APK (app-release.apk)"
 	@echo "  make install-apk         Build and install release APK onto connected Pixel"
 	@echo "  make icons               Regenerate all Android/iOS app launcher icons"
+	@echo "  make clean               Clean Flutter/Gradle build caches and Go binary"
 	@echo ""
 
 ## run-local: Run Go backend locally with Firebase Auth and ADC Vertex AI

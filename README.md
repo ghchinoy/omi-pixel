@@ -128,15 +128,20 @@ make run-app
 
 ## 🧪 Development & Testing
 
+Run `make help` to view all 21 workflow targets (full target reference with parameters in [docs/user-guide.md](docs/user-guide.md#makefile-target-reference)).
+
 ```bash
-# Run Go backend + Flutter unit tests
+# Check local Flutter, ADB, and Firebase mobile readiness
+make doctor-app
+
+# Run Go backend + Flutter unit/widget tests
 make test
 
 # Run Go vet + Flutter static analysis
 make analyze
 
-# Build standalone release APK for sideloading
-make build-apk
+# Build & sideload release APK onto connected Pixel
+make install-apk
 ```
 
 ### Repository Layout

@@ -202,6 +202,11 @@ To keep the Pixel companion featherweight and dependency-minimal, `app/` avoids 
   { "service": "omi-pixel", "status": "ok", "version": "0.4.2" }
   ```
 
+### Public Client Config (Universal APK Runtime Bootstrap)
+- **Endpoint**: `GET /api/client-config`
+- **Auth**: Public
+- **Response**: `200 OK` — returns the non-secret public Firebase client configuration (`project_id`, `api_key`, `app_id`, `messaging_sender_id`, `auth_domain`, `storage_bucket`, `auth_disabled`) already rendered in the Web SPA, allowing pre-built universal APKs to initialize Firebase dynamically from the user's Cloud Run URL.
+
 ### Live Transcription WebSocket
 - **Endpoint**: `GET /api/live?lang=en&mode=verbatim|smart&session=sess_12345678`
 - **Auth**: Required via HTTP upgrade header **`Authorization: Bearer <FIREBASE_ID_TOKEN>`** (query-string `access_token` is rejected so JWTs never appear in request logs).
@@ -279,6 +284,14 @@ cd service && go test -race ./... && golangci-lint run ./...
 # Security vulnerability check (Go)
 cd service && go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 ```
+
+### GitHub Actions CI & Release APK (`.github/workflows/ci-and-release-apk.yml`)
+- Runs on every push/PR to `main`, manual `workflow_dispatch`, and `v*` tag push:
+  - **`go-service`**: `go vet`, `go test -race`, and `go build`.
+  - **`flutter-android`**: `flutter pub get`, `flutter analyze`, `flutter test`, and standalone `flutter build apk --release` (uploading `omi-pixel-<ref>.apk` + `.sha256` artifact, and attaching them automatically to the GitHub Release on `v*` tags).
+- **Optional Repository Secrets (for custom signed / fork builds)**:
+  - `ANDROID_KEYSTORE_B64` & `ANDROID_KEY_PROPERTIES`: Release keystore signing.
+  - `GOOGLE_SERVICES_JSON_B64` or `FIREBASE_PROJECT_ID` / `FIREBASE_ANDROID_API_KEY` / `FIREBASE_ANDROID_APP_ID` / `FIREBASE_MESSAGING_SENDER_ID`: Optional baked Firebase config (omitting them builds a universal APK that bootstraps via `GET /api/client-config`).
 
 ---
 
