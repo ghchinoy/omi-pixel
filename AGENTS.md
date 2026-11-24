@@ -26,7 +26,7 @@ rtk tsc                 rtk lint
 `omi-pixel` is a standalone, lightweight Flutter mobile companion app and Go Cloud Run backend for Omi hardware devices (DevKit & CV1) on Google Pixel (Android).
 
 ## Architecture
-- **App (`app/`)**: Flutter app targeting Android (Pixel 11). Connects directly to Omi via BLE using `sdks/device/dart` (`omi_device`), decodes Opus audio to 16kHz PCM, streams live transcription via Cloud Run WebSocket proxy to Gemini 3.5 Transcribe Live (`gemini-3.5-transcribe-live`), and uploads recorded session WAVs to Cloud Run.
+- **App (`app/`)**: Standalone Flutter app targeting Android (Pixel). Connects directly to Omi via BLE using a self-contained `flutter_blue_plus` GATT transport (`app/lib/services/omi_ble_protocol.dart`), decodes Opus audio to 16kHz PCM, streams live transcription via Cloud Run WebSocket proxy (`Authorization: Bearer`) to Gemini 3.5 Transcribe Live (`gemini-3.5-transcribe-live`), persists PCM/WAV to disk, and uploads recorded session WAVs in the background to Cloud Run.
 - **Backend Service (`service/`)**: Go HTTP & WebSocket service deployed on Google Cloud Run. Proxies live audio to Vertex AI Multimodal Live WebSocket and performs Gemini 3.5 Transcribe batch diarization (`gemini-3.5-transcribe`) on Vertex AI with native speaker diarization, persists sessions to Firestore, and serves a responsive Web Review UI.
 - **Infrastructure (`infra/`)**: Shell automation for GCP project enablement, Firestore provisioning, Artifact Registry, and Cloud Run deployment.
 

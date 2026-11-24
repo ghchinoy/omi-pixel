@@ -39,6 +39,7 @@ service/*.prof
 # ---- Secrets & local configuration ----
 *.env
 infra/.env
+app/android/key.properties
 *.keystore
 *.jks
 *.p12

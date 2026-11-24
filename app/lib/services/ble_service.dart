@@ -3,12 +3,12 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:omi_device/omi_device.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/device.dart';
 import 'audio_decoder.dart';
+import 'omi_ble_protocol.dart';
 
 /// Event types emitted by Omi hardware button GATT characteristic (`23ba7925-...`).
 enum OmiButtonEventType {
@@ -73,10 +73,10 @@ class BleService {
 
   static const String _keyLastDeviceId = 'last_ble_device_id';
   static const String _keyLastDeviceName = 'last_ble_device_name';
-  static const String hapticServiceUuid = 'cab1ab95-2ea5-4f4d-bb56-874b72cfc984';
-  static const String hapticCharacteristicUuid = 'cab1ab96-2ea5-4f4d-bb56-874b72cfc984';
+  static const String hapticServiceUuid = OmiUuids.hapticService;
+  static const String hapticCharacteristicUuid = OmiUuids.hapticTrigger;
 
-  final OmiBleClient _bleClient = createOmiBleClient();
+  final OmiBleTransport _bleClient = OmiBleTransport();
 
   OmiDeviceInfo? _currentDevice;
   OmiDeviceInfo? get currentDevice => _currentDevice;
@@ -348,11 +348,11 @@ class BleService {
 
       final btnChar = _findCharacteristic(
         services,
-        buttonServiceUuid,
-        buttonTriggerCharacteristicUuid,
+        OmiUuids.buttonService,
+        OmiUuids.buttonTrigger,
       );
       if (btnChar == null) {
-        debugPrint('[BleService] Button characteristic ($buttonTriggerCharacteristicUuid) not found.');
+        debugPrint('[BleService] Button characteristic (${OmiUuids.buttonTrigger}) not found.');
         return;
       }
 
@@ -376,7 +376,7 @@ class BleService {
         _buttonEventController.add(event);
       });
       fbpDevice.cancelWhenDisconnected(_buttonSub!);
-      debugPrint('[BleService] Subscribed to Omi button characteristic ($buttonTriggerCharacteristicUuid).');
+      debugPrint('[BleService] Subscribed to Omi button characteristic (${OmiUuids.buttonTrigger}).');
     } catch (e) {
       debugPrint('[BleService] Error attaching button/haptic characteristics: $e');
     }

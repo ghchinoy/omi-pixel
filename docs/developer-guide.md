@@ -62,7 +62,7 @@ Pass 3 (Metadata & Synthesis):
 
 ## 3. BLE Protocol and Audio Codecs
 
-The mobile app uses the `omi_device` Dart SDK (`sdks/device/dart`) and `flutter_blue_plus` (monitoring `BluetoothDevice.connectionState` for mid-recording disconnects).
+The mobile app uses a self-contained Omi BLE GATT transport (`app/lib/services/omi_ble_protocol.dart`) built directly on `flutter_blue_plus` (zero external path dependencies, monitoring `BluetoothDevice.connectionState` for mid-recording disconnects).
 
 ### GATT Characteristics
 - **Audio Service UUID**: `19b10000-e8f2-537e-4f6c-d104768a1214`
@@ -112,6 +112,7 @@ app/lib/
 │   ├── auth_service.dart          # Firebase Auth & Google Sign-In with forceRefresh token support
 │   ├── ble_service.dart           # BLE scan, auto-reconnect, battery & connectionState disconnect monitor
 │   ├── gemini_live_service.dart   # Authenticated WebSocket client (/api/live via Authorization header)
+│   ├── omi_ble_protocol.dart      # Self-contained Omi GATT UUIDs, 3-byte header strip & FBP transport
 │   ├── recording_file_store.dart  # Disk PCM streaming, WAV finalization, crash recovery & pending upload queue
 │   ├── session_manager.dart       # Recording coordinator, ForegroundService, audio health & background upload
 │   └── settings_service.dart      # SharedPreferences (URL, theme, live mode, summary model, language)

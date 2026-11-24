@@ -24,7 +24,7 @@ DART_DEFINES := --dart-define=FIREBASE_PROJECT_ID=$(GOOGLE_CLOUD_PROJECT) \
 	--dart-define=FIREBASE_APP_ID=$(FIREBASE_ANDROID_APP_ID) \
 	--dart-define=FIREBASE_MESSAGING_SENDER_ID=$(FIREBASE_MESSAGING_SENDER_ID)
 
-.PHONY: help run-local run-local-noauth run-app adb-reverse configure-firebase authorize deauthorize setup preflight deploy postflight release test analyze build-apk install-apk icons clean
+.PHONY: help run-local run-local-noauth run-app adb-reverse configure-firebase doctor-app authorize deauthorize setup preflight deploy postflight release test analyze build-apk install-apk icons clean
 
 ## help: Display this help message
 help:
@@ -52,8 +52,9 @@ help:
 	@echo ""
 	@echo "Quality & Testing:"
 	@echo "  make test              Run unit tests for Go backend and Flutter app"
-	@echo "  make analyze             Run linter and static analysis on Go and Flutter"
-	@echo "  make build-apk           Build release Android APK (app-release.apk)"
+	@echo "  make analyze           Run linter and static analysis on Go and Flutter"
+	@echo "  make doctor-app        Check local Flutter/ADB/Firebase mobile build readiness"
+	@echo "  make build-apk         Build release Android APK (app-release.apk)"
 	@echo "  make install-apk         Build and install release APK onto connected Pixel"
 	@echo "  make icons               Regenerate all Android/iOS app launcher icons"
 	@echo ""
@@ -155,6 +156,28 @@ analyze:
 	@echo ""
 	@echo "==> Running Flutter analyze..."
 	cd app && flutter analyze
+
+## doctor-app: Verify Flutter, ADB, and Firebase config readiness for building/installing the Pixel app
+doctor-app:
+	@echo "==> Checking Pixel mobile app build readiness..."
+	@command -v flutter >/dev/null 2>&1 && echo "✓ flutter: $$(flutter --version | head -n 1)" || { echo "✗ flutter not found (install Flutter 3.44+ / Dart 3.12+)"; exit 1; }
+	@command -v adb >/dev/null 2>&1 && echo "✓ adb: $$(adb version | head -n 1)" || echo "! adb not found (needed only for USB/wireless Pixel sideloading)"
+	@if command -v adb >/dev/null 2>&1; then \
+		DEV_COUNT=$$(adb devices | awk 'NR>1 && $$2=="device" {c++} END {print c+0}'); \
+		echo "  Connected Android devices: $$DEV_COUNT"; \
+	fi
+	@if [ -f app/android/app/google-services.json ]; then \
+		echo "✓ Firebase Android config found (app/android/app/google-services.json)"; \
+	elif [ -n "$(FIREBASE_ANDROID_API_KEY)" ] && [ -n "$(FIREBASE_ANDROID_APP_ID)" ]; then \
+		echo "✓ Firebase --dart-define keys loaded from infra/.env (note: run 'make configure-firebase' for Google Sign-In)"; \
+	else \
+		echo "! No Firebase Android config yet — offline builds still work; run 'make configure-firebase' to enable Google Sign-In"; \
+	fi
+	@if [ -f app/android/key.properties ]; then \
+		echo "✓ Release keystore configured (app/android/key.properties)"; \
+	else \
+		echo "ℹ Using debug signing for release APK sideloading (optional: add app/android/key.properties for custom release signing)"; \
+	fi
 
 ## build-apk: Build standalone release APK for Google Pixel sideloading
 build-apk:

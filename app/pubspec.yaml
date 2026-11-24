@@ -11,10 +11,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Local Omi Device SDK
-  omi_device:
-    path: ../../omi/sdks/device/dart
-
   # Opus Audio Decoder
   opus_flutter: ^3.0.3
   opus_dart:

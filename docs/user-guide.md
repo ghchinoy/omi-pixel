@@ -76,6 +76,7 @@ make run-app
 | `make release` | Runs full deployment pipeline: `preflight` -> `deploy` -> `postflight` |
 | `make test` | Runs unit tests across Go backend and Flutter app |
 | `make analyze` | Runs static analysis and linting checks on Go (`go vet`) and Flutter (`flutter analyze`) |
+| `make doctor-app` | Checks local Flutter, ADB, Firebase, and signing readiness for mobile builds |
 | `make build-apk` | Builds release Android APK (`app/build/app/outputs/flutter-apk/app-release.apk`) |
 | `make install-apk` | Builds release APK and installs onto connected Pixel via ADB |
 | `make clean` | Cleans Flutter/Gradle build caches (recommended after plugin upgrades) |
@@ -113,6 +114,13 @@ make run-app
 ---
 
 ## 5. Installing on Google Pixel
+
+### Mobile Build Prerequisites (Fresh Standalone Clone)
+`omi-pixel` is **100% standalone** — no sibling Omi repository is required.
+- **Flutter `3.44+` / Dart `3.12+`**, **JDK 17**, and **Android SDK (`compileSdk 37`)**
+- Optional: Run **`make doctor-app`** to verify your Flutter toolchain, connected Pixel ADB device, and Firebase config before building.
+- **Firebase vs. Offline Mode**: `app/android/app/build.gradle.kts` conditionally applies the Google Services plugin only when `app/android/app/google-services.json` exists, so fresh clones can build and test offline (`make run-local-noauth`) immediately, then run `make configure-firebase` when ready for Google Sign-In.
+- **Custom Release Signing / Bundle ID (Optional)**: Add `app/android/key.properties` to sign release APKs with your own keystore (otherwise debug signing is used automatically for personal sideloading), or pass `-PapplicationId=com.yourorg.omi_pixel` if using a custom Firebase package name.
 
 ### Option A: Release APK Sideload (Recommended)
 To install the standalone release build onto your Pixel over USB:

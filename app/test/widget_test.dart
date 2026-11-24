@@ -16,6 +16,7 @@ import 'package:omi_pixel/services/api_client.dart';
 import 'package:omi_pixel/services/audio_decoder.dart';
 import 'package:omi_pixel/services/ble_service.dart';
 import 'package:omi_pixel/services/gemini_live_service.dart';
+import 'package:omi_pixel/services/omi_ble_protocol.dart';
 import 'package:omi_pixel/services/recording_file_store.dart';
 import 'package:omi_pixel/services/session_manager.dart';
 import 'package:omi_pixel/services/settings_service.dart';
@@ -167,6 +168,16 @@ void main() {
       expect(rel?.type, OmiButtonEventType.release);
 
       expect(OmiButtonEvent.parsePayload([1, 0]), isNull);
+    });
+
+    test('stripOmiPacketHeader removes 3-byte BLE sequence header and detects Omi devices', () {
+      expect(stripOmiPacketHeader([1, 2, 3, 0xAA, 0xBB]), [0xAA, 0xBB]);
+      expect(stripOmiPacketHeader([1, 2, 3]), isEmpty);
+      expect(stripOmiPacketHeader([1]), isEmpty);
+
+      expect(OmiBleTransport.isLikelyOmiDevice('Omi CV1', const []), isTrue);
+      expect(OmiBleTransport.isLikelyOmiDevice('DevKit 2', const []), isTrue);
+      expect(OmiBleTransport.isLikelyOmiDevice('Random Speaker', const []), isFalse);
     });
 
     test('SessionManager.handleHardwareButtonEvent enforces unlock, debounce, and haptic actions', () async {
