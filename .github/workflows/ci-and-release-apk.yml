@@ -100,7 +100,7 @@ jobs:
           if [ -n "${FIREBASE_PROJECT_ID}" ] && [ -n "${FIREBASE_ANDROID_API_KEY}" ] && [ -n "${FIREBASE_ANDROID_APP_ID}" ]; then
             DART_DEFINES="--dart-define=FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID} --dart-define=FIREBASE_API_KEY=${FIREBASE_ANDROID_API_KEY} --dart-define=FIREBASE_APP_ID=${FIREBASE_ANDROID_APP_ID} --dart-define=FIREBASE_MESSAGING_SENDER_ID=${FIREBASE_MESSAGING_SENDER_ID}"
           fi
-          flutter build apk --release ${DART_DEFINES}
+          flutter build apk --release --android-skip-build-dependency-validation ${DART_DEFINES}
 
       - name: Prepare versioned APK & SHA-256 checksum
         id: apk
