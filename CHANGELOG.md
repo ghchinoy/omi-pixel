@@ -8,8 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-11-24
+
 ### Changed
-- **Flutter 3.50.1 Stable, AGP 9.3.1 / Gradle 9.5.0 & `package:material_ui` Migration**: Upgraded local & CI Flutter toolchains to `3.50.1` (`Dart 3.14.0`), upgraded Android Gradle Plugin (`8.11.1` → `9.3.1`), Gradle wrapper (`8.14.2` → `9.5.0`), and Kotlin Gradle Plugin (`2.4.20`), added an `afterEvaluate` subproject `compileSdk` floor (`36`) for legacy plugins (`opus_flutter_android`) under AGP 9 AAR metadata checks, and migrated all 9 `package:flutter/material.dart` imports to `package:material_ui/material_ui.dart` (`material_ui: ^1.1.0`) with zero strict analyzer issues `[omi-pixel-4pd]`.
+- **Flutter 3.50.1 Stable, AGP 9.3.1 / Gradle 9.5.0 & `package:material_ui` Migration**: Upgraded local & CI Flutter toolchains to `3.50.1` (`Dart 3.14.0`), upgraded Android Gradle Plugin (`8.11.1` → `9.3.1`), Gradle wrapper (`8.14.2` → `9.5.0`), Kotlin Gradle Plugin (`2.4.20`), and GitHub Actions JDK (`17` → `21`), added an `afterEvaluate` subproject `compileSdk` floor (`36`) for legacy plugins (`opus_flutter_android`) under AGP 9 AAR metadata checks, and migrated all 9 `package:flutter/material.dart` imports to `package:material_ui/material_ui.dart` (`material_ui: ^1.1.0`) with zero strict analyzer issues and smaller release APKs (`62.9 MB`) `[omi-pixel-4pd]`.
 
 ## [0.4.3] - 2026-11-23
 
@@ -134,7 +136,8 @@ _Initial release._
 - Audio playback cards with turn tap-to-seek synchronization on both mobile and web clients.
 - Infrastructure automation scripts (`infra/`) and top-level `Makefile`.
 
-[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.0...v0.4.1

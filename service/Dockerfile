@@ -7,7 +7,7 @@ RUN apk upgrade --no-cache && apk add --no-cache git ca-certificates
 COPY go.mod go.sum* ./
 RUN go mod download
 
-ARG APP_VERSION=0.4.3
+ARG APP_VERSION=0.4.4
 
 COPY . .
 
