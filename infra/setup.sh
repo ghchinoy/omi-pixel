@@ -22,7 +22,11 @@ fi
 
 REGION="${GCP_REGION:-us-central1}"
 DATABASE="${FIRESTORE_DATABASE:-omi-pixel}"
-BUCKET="${GCS_BUCKET:-${GOOGLE_CLOUD_PROJECT}-omi-pixel-audio}"
+if [[ -z "${GCS_BUCKET:-}" || "${GCS_BUCKET}" == *"your-gcp-project-id"* ]]; then
+  BUCKET="${GOOGLE_CLOUD_PROJECT}-omi-pixel-audio"
+else
+  BUCKET="${GCS_BUCKET}"
+fi
 
 SA_NAME="${SERVICE_ACCOUNT_NAME:-sa-omi-pixel}"
 SA_EMAIL="${SA_NAME}@${GOOGLE_CLOUD_PROJECT}.iam.gserviceaccount.com"
@@ -107,4 +111,8 @@ if [[ -n "${ACTIVE_USER}" ]]; then
 fi
 
 echo "==> Infrastructure setup complete for project ${GOOGLE_CLOUD_PROJECT} (Firestore DB: ${DATABASE}, Bucket: gs://${BUCKET})!"
-echo "Next: run ./preflight.sh to verify, then ./deploy.sh to deploy to Cloud Run."
+echo ""
+echo "Next steps:"
+echo "  1. Enable Google Sign-In in Firebase Console: https://console.firebase.google.com/project/${GOOGLE_CLOUD_PROJECT}/authentication/providers"
+echo "  2. Generate & sync Firebase Web/Android keys: make configure-firebase"
+echo "  3. Deploy backend + Web SPA to Cloud Run:     make release"

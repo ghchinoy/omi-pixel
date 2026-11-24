@@ -66,7 +66,8 @@ make run-app
 | `make run-local-noauth` | Runs Go backend with `AUTH_DISABLED=true` (offline local testing) |
 | `make run-app` | Runs Flutter companion app on connected Android device |
 | `make adb-reverse` | Forwards `tcp:8080` from Pixel to your development machine |
-| `make configure-firebase` | Generates platform Firebase configs via `flutterfire configure` |
+| `make configure-firebase` | Generates platform Firebase configs via `flutterfire configure` and auto-syncs keys to `infra/.env` |
+| `make sync-firebase-env` | Copies Firebase Web & Android keys from `app/lib/firebase_options.dart` into `infra/.env` |
 | `make authorize EMAIL=...` | Adds user email to Firestore `authorized_users` allowlist (`ADMIN=true` optional) |
 | `make deauthorize EMAIL=...` | Removes user email from Firestore allowlist |
 | `make setup` | Provisions GCP APIs, dedicated Service Account, Firestore DB, and GCS bucket |
@@ -84,32 +85,37 @@ make run-app
 
 ---
 
-## 4. Deploying to Google Cloud Run
+## 4. Deploying to Google Cloud Run (Clean GCP Project → Live Web SPA)
 
-1. **Verify Environment**:
-   Ensure `infra/.env` contains your project parameters:
+1. **Create `infra/.env` (only 1 required edit)**:
    ```bash
-   GOOGLE_CLOUD_PROJECT=your-gcp-project-id
-   GCP_REGION=us-central1
-   SERVICE_NAME=omi-pixel-service
-   SERVICE_ACCOUNT_NAME=sa-omi-pixel
-   FIRESTORE_DATABASE=omi-pixel
-   GCS_BUCKET=your-gcp-project-id-omi-pixel-audio
-   GOOGLE_CLOUD_LOCATION=global
-   FIREBASE_API_KEY=your-web-api-key
-   FIREBASE_APP_ID=your-web-app-id
-   FIREBASE_ANDROID_API_KEY=your-android-api-key
-   FIREBASE_ANDROID_APP_ID=your-android-app-id
-   FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+   cp infra/.env.template infra/.env
+   # Set GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+   # (GCS_BUCKET auto-derives as <GOOGLE_CLOUD_PROJECT>-omi-pixel-audio when left blank)
    ```
 
-2. **Execute Full Release**:
+2. **Provision Cloud Resources & Allowlist Your Account**:
+   ```bash
+   make setup
+   ```
+   Enables required APIs (`run`, `firestore`, `storage`, `aiplatform`, `identitytoolkit`, `artifactregistry`, `cloudbuild`), creates the dedicated least-privilege service account `sa-omi-pixel`, provisions the Firestore `omi-pixel` database and GCS audio bucket, and authorizes your active `gcloud` email.
+
+3. **Enable Google Sign-In & Sync Firebase Keys (Zero Manual Copy-Paste)**:
+   - Enable the **Google** sign-in provider in Firebase Console: `https://console.firebase.google.com/project/<your-project-id>/authentication/providers`
+   - Run:
+     ```bash
+     make configure-firebase
+     ```
+     This generates `app/lib/firebase_options.dart` + `google-services.json` and automatically runs `make sync-firebase-env` to populate `FIREBASE_API_KEY`, `FIREBASE_APP_ID`, `FIREBASE_ANDROID_*`, and `FIREBASE_MESSAGING_SENDER_ID` in `infra/.env`.
+
+4. **Run Preflight, Deploy & Verify**:
    ```bash
    make release
    ```
+   `preflight` validates APIs, Firestore, GCS, allowlist, and Firebase Web keys before deploying; `deploy` forwards all model settings (`SUMMARY_MODEL`, etc.) and prints your live Cloud Run URL (`https://omi-pixel-service-xyz.a.run.app`); `postflight` verifies `/api/health`, `/`, and `401` auth enforcement.
 
-3. **Copy the Output Service URL**:
-   Example: `https://omi-pixel-service-xyz.a.run.app`.
+5. **Authorize Your Cloud Run Domain for Google Sign-In (One-Time)**:
+   - Copy the hostname printed by `make release` (e.g. `omi-pixel-service-xyz.a.run.app`) and add it under **Firebase Console > Authentication > Settings > Authorized domains** (direct link printed at the end of `make deploy`).
 
 ---
 

@@ -12,6 +12,9 @@ GOOGLE_CLOUD_PROJECT ?= your-gcp-project-id
 GOOGLE_CLOUD_LOCATION ?= global
 FIRESTORE_DATABASE ?= omi-pixel
 GCS_BUCKET ?= $(GOOGLE_CLOUD_PROJECT)-omi-pixel-audio
+ifeq ($(strip $(GCS_BUCKET)),)
+  GCS_BUCKET := $(GOOGLE_CLOUD_PROJECT)-omi-pixel-audio
+endif
 FIREBASE_API_KEY ?=
 FIREBASE_APP_ID ?=
 FIREBASE_ANDROID_API_KEY ?= $(FIREBASE_API_KEY)
@@ -24,7 +27,7 @@ DART_DEFINES := --dart-define=FIREBASE_PROJECT_ID=$(GOOGLE_CLOUD_PROJECT) \
 	--dart-define=FIREBASE_APP_ID=$(FIREBASE_ANDROID_APP_ID) \
 	--dart-define=FIREBASE_MESSAGING_SENDER_ID=$(FIREBASE_MESSAGING_SENDER_ID)
 
-.PHONY: help run-local run-local-noauth run-app adb-reverse configure-firebase doctor-app authorize deauthorize setup preflight deploy postflight release test analyze build-apk install-apk icons clean
+.PHONY: help run-local run-local-noauth run-app adb-reverse configure-firebase sync-firebase-env doctor-app authorize deauthorize setup preflight deploy postflight release test analyze build-apk install-apk icons clean
 
 ## help: Display this help message
 help:
@@ -37,7 +40,8 @@ help:
 	@echo "  make run-local-noauth    Run Go backend locally with AUTH_DISABLED=true"
 	@echo "  make run-app             Run Flutter app on connected Android Pixel device"
 	@echo "  make adb-reverse         Reverse proxy port $(PORT) from Pixel to local Mac"
-	@echo "  make configure-firebase  Generate Firebase app configs via flutterfire CLI"
+	@echo "  make configure-firebase  Generate Firebase app configs via flutterfire CLI & sync to infra/.env"
+	@echo "  make sync-firebase-env   Copy Firebase Web & Android keys from firebase_options.dart into infra/.env"
 	@echo ""
 	@echo "User Authorization:"
 	@echo "  make authorize EMAIL=user@domain.com [ADMIN=true]  Authorize user in Firestore"
@@ -91,7 +95,7 @@ run-app:
 	@echo "==> Running Flutter companion app on connected device..."
 	cd app && flutter run $(DART_DEFINES)
 
-## configure-firebase: Run flutterfire configure for GOOGLE_CLOUD_PROJECT
+## configure-firebase: Run flutterfire configure for GOOGLE_CLOUD_PROJECT and sync keys to infra/.env
 configure-firebase:
 	@if [ -z "$(GOOGLE_CLOUD_PROJECT)" ] || [ "$(GOOGLE_CLOUD_PROJECT)" = "your-gcp-project-id" ]; then \
 		echo "Error: Set GOOGLE_CLOUD_PROJECT in infra/.env or pass GOOGLE_CLOUD_PROJECT=your-project-id"; \
@@ -99,6 +103,11 @@ configure-firebase:
 	fi
 	@echo "==> Configuring Firebase for project $(GOOGLE_CLOUD_PROJECT)..."
 	cd app && flutterfire configure --project=$(GOOGLE_CLOUD_PROJECT)
+	@./infra/sync-firebase-env.sh
+
+## sync-firebase-env: Sync Firebase Web & Android keys from app/lib/firebase_options.dart into infra/.env
+sync-firebase-env:
+	@./infra/sync-firebase-env.sh
 
 ## adb-reverse: Set up ADB reverse port forwarding for local testing over USB
 adb-reverse:

@@ -104,7 +104,7 @@ fi
 # 4. Required APIs enabled
 echo ""
 echo "-- Enabled GCP APIs --"
-REQUIRED_APIS=(run.googleapis.com firestore.googleapis.com storage.googleapis.com identitytoolkit.googleapis.com artifactregistry.googleapis.com aiplatform.googleapis.com)
+REQUIRED_APIS=(run.googleapis.com firestore.googleapis.com storage.googleapis.com identitytoolkit.googleapis.com artifactregistry.googleapis.com aiplatform.googleapis.com cloudbuild.googleapis.com)
 ENABLED_APIS="$(gcloud services list --enabled --project="${PROJECT_ID}" --format='value(config.name)' 2>/dev/null || true)"
 if [[ -z "${ENABLED_APIS}" ]]; then
   warn "Could not list enabled APIs (permission or auth issue). Skipping API checks."
@@ -133,11 +133,26 @@ fi
 # 6. Cloud Storage bucket exists
 echo ""
 echo "-- Cloud Storage Audio Bucket --"
-BUCKET="${GCS_BUCKET:-${PROJECT_ID}-omi-pixel-audio}"
+if [[ -z "${GCS_BUCKET:-}" || "${GCS_BUCKET}" == *"your-gcp-project-id"* ]]; then
+  BUCKET="${PROJECT_ID}-omi-pixel-audio"
+else
+  BUCKET="${GCS_BUCKET}"
+fi
 if gcloud storage buckets describe "gs://${BUCKET}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
   pass "GCS Bucket 'gs://${BUCKET}' exists"
 else
   warn "GCS Bucket 'gs://${BUCKET}' not found. Run ./setup.sh to create it (audio will fall back to inline processing)."
+fi
+
+# 6b. Firebase Web SPA client keys check
+echo ""
+echo "-- Firebase Web SPA Configuration --"
+if [[ "${AUTH_DISABLED:-false}" == "true" ]]; then
+  warn "AUTH_DISABLED=true in infra/.env (recommended only for local offline dev, not Cloud Run)."
+elif [[ -n "${FIREBASE_API_KEY:-}" && -n "${FIREBASE_APP_ID:-}" && -n "${FIREBASE_MESSAGING_SENDER_ID:-}" ]]; then
+  pass "Firebase Web SPA keys present in infra/.env (FIREBASE_API_KEY, FIREBASE_APP_ID, FIREBASE_MESSAGING_SENDER_ID)"
+else
+  warn "Firebase Web SPA keys missing in infra/.env. Web Review UI will show 'Config Required' until populated. Run: make configure-firebase (or make sync-firebase-env)"
 fi
 
 # 7. Authorized Users allowlist check
