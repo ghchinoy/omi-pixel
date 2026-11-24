@@ -199,7 +199,7 @@ To keep the Pixel companion featherweight and dependency-minimal, `app/` avoids 
 - **Auth**: Public
 - **Response**: `200 OK`
   ```json
-  { "service": "omi-pixel", "status": "ok", "version": "0.4.2" }
+  { "service": "omi-pixel", "status": "ok", "version": "0.4.3" }
   ```
 
 ### Public Client Config (Universal APK Runtime Bootstrap)

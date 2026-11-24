@@ -13,7 +13,7 @@ import '../theme/lustrous_theme.dart';
 import 'login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
-  static const String appVersion = '0.4.2+10';
+  static const String appVersion = '0.4.3+11';
 
   const SettingsScreen({super.key});
 

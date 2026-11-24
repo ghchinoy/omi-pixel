@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-23
+
+### Added
+- **Universal Pre-Built APK & Runtime Firebase Bootstrap**: Added public `GET /api/client-config` on the Go backend returning non-secret public Firebase client config, runtime `FirebaseOptions` discovery + persistence in `AuthService.configureFromBackend()` (triggered automatically by **Settings → Test Connection**), and browser OAuth fallback via `FirebaseAuth.signInWithProvider(GoogleAuthProvider())` so a single pre-built GitHub Release APK works against any self-hosted Cloud Run backend with zero local Flutter install or Android SHA-1 setup `[omi-pixel-gnq, omi-pixel-88n]`.
+- **GitHub Actions CI & Automated Release APK Builds**: Added `.github/workflows/ci-and-release-apk.yml` (Node 24 action majors, pinned Flutter `3.47.9` matching AGP 8.11 / Gradle 8.14) running Go `vet`/`-race`/build and Flutter `analyze`/`test`/standalone release APK build on every push, PR, manual `workflow_dispatch`, and `v*` tag release — automatically attaching `omi-pixel-vX.Y.Z.apk` and `.sha256` checksums to GitHub Releases `[omi-pixel-08o]`.
+- **Standalone Flutter Onboarding & `make doctor-app`**: Replaced the sibling `../../omi` path dependency with a self-contained `OmiBleTransport` (`app/lib/services/omi_ble_protocol.dart`) over `flutter_blue_plus`, made `com.google.gms.google-services` conditional in `app/android/app/build.gradle.kts`, added optional `app/android/key.properties` release signing + `-PapplicationId` override, added `make doctor-app`, and switched `app/lib/firebase_options.dart` to a clean `--dart-define` template `[omi-pixel-661]`.
+- **Cloud Run & Web SPA Onboarding Automation**: Added `infra/sync-firebase-env.sh` (`make sync-firebase-env`, auto-chained into `make configure-firebase`) to extract Web & Android Firebase keys from `firebase_options.dart` into `infra/.env`, and hardened `infra/preflight.sh` to validate `cloudbuild`, `aiplatform`, `firestore`, `storage` APIs and Firebase Web keys before deploy `[omi-pixel-3ad]`.
+- **Flutter Widget Tree Diagrams (Dark & Light)**: Added `docs/diagrams/flutter-widget-tree.dot` / `-light.dot` (`.webp` assets) and Developer Guide Section 5 documenting the Flutter companion widget hierarchy and service bindings `[omi-pixel-lfu]`.
+
+### Changed
+- **Expanded Makefile Target Reference**: Audited all 21 `.PHONY` targets, added `make clean` to `make help`, organized `docs/user-guide.md` into 4 categorized tables with parameters and examples, and documented the pre-built universal APK install flow in `README.md`, `docs/user-guide.md`, and `docs/developer-guide.md` `[omi-pixel-aj3]`.
+
 ## [0.4.2] - 2026-11-23
 
 ### Added
@@ -119,7 +131,8 @@ _Initial release._
 - Audio playback cards with turn tap-to-seek synchronization on both mobile and web clients.
 - Infrastructure automation scripts (`infra/`) and top-level `Makefile`.
 
-[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/ghchinoy/omi-pixel/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/ghchinoy/omi-pixel/compare/v0.3.4...v0.4.0
