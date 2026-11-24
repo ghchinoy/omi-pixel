@@ -61,10 +61,11 @@ func NewServer(store Store, audioStore AudioStore, gemini *GeminiClient, livePro
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
-	// 1. Public Endpoints (SPA Shell & Liveness)
+	// 1. Public Endpoints (SPA Shell, Client Config & Liveness)
 	mux.HandleFunc("GET /{$}", s.handleWebSPA)
 	mux.HandleFunc("GET /sessions/{id}", s.handleWebSPA)
 	mux.HandleFunc("GET /api/health", s.handleHealth)
+	mux.HandleFunc("GET /api/client-config", s.handleClientConfig)
 
 	// 2. Protected API Endpoints (wrapped with Firebase Auth + Allowlist Middleware)
 	apiMux := http.NewServeMux()
@@ -117,6 +118,18 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 		"status":  "ok",
 		"service": "omi-pixel",
 		"version": Version,
+	})
+}
+
+func (s *Server) handleClientConfig(w http.ResponseWriter, _ *http.Request) {
+	respondJSON(w, http.StatusOK, map[string]any{
+		"project_id":          s.webConfig.ProjectID,
+		"api_key":             s.webConfig.APIKey,
+		"app_id":              s.webConfig.AppID,
+		"messaging_sender_id": s.webConfig.MessagingSenderID,
+		"auth_domain":         s.webConfig.AuthDomain,
+		"storage_bucket":      s.webConfig.StorageBucket,
+		"auth_disabled":       s.webConfig.AuthDisabled,
 	})
 }
 

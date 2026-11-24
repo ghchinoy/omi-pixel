@@ -482,3 +482,46 @@ func TestNormalizeTranscriptionModeAndPersistence(t *testing.T) {
 		t.Errorf("created.TranscriptionMode = %q, want %q", created.TranscriptionMode, "smart")
 	}
 }
+
+func TestClientConfigEndpoint(t *testing.T) {
+	ctx := t.Context()
+	store := NewMemoryStore()
+	auth, err := NewAuthenticator(ctx, "test-proj", store, false)
+	if err != nil {
+		// Auth client may not initialize without ADC; test with disabled authenticator
+		auth, err = NewAuthenticator(ctx, "test-proj", store, true)
+		if err != nil {
+			t.Fatalf("NewAuthenticator(disabled=true) error = %v", err)
+		}
+	}
+	spaTmpl, err := web.ParseTemplates()
+	if err != nil {
+		t.Fatalf("web.ParseTemplates() error = %v", err)
+	}
+	cfg := web.WebConfig{
+		ProjectID:         "demo-proj",
+		APIKey:            "pub-api-key",
+		AppID:             "1:123:web:abc",
+		MessagingSenderID: "123",
+		AuthDomain:        "demo-proj.firebaseapp.com",
+		StorageBucket:     "demo-proj.firebasestorage.app",
+		AuthDisabled:      false,
+	}
+	server := NewServer(store, &NoopAudioStore{}, nil, nil, auth, spaTmpl, cfg)
+	handler := server.Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/client-config", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/client-config status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var got map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("Decode(/api/client-config) error = %v", err)
+	}
+	if got["project_id"] != "demo-proj" || got["api_key"] != "pub-api-key" || got["app_id"] != "1:123:web:abc" {
+		t.Errorf("GET /api/client-config = %v, want demo-proj/pub-api-key/1:123:web:abc", got)
+	}
+}

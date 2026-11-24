@@ -145,11 +145,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
           final data = jsonDecode(resp.body) as Map<String, dynamic>;
           ver = data['version'] as String?;
         } catch (_) {}
+
+        // Universal APK bootstrap: fetch public Firebase config from backend if not baked in
+        bool bootstrappedAuth = false;
+        if (!AuthService.instance.isAvailable) {
+          bootstrappedAuth = await AuthService.instance.configureFromBackend(endpoint);
+        }
+
+        if (!mounted) return;
         setState(() {
           _backendVersion = ver ?? _backendVersion;
           _connectionStatusMessage = ver != null
-              ? 'Cloud Run service reachable! (v$ver)'
-              : 'Cloud Run service reachable!';
+              ? (bootstrappedAuth
+                  ? 'Cloud Run reachable (v$ver) • Firebase configured!'
+                  : 'Cloud Run service reachable! (v$ver)')
+              : (bootstrappedAuth
+                  ? 'Cloud Run reachable • Firebase configured!'
+                  : 'Cloud Run service reachable!');
           _connectionSuccess = true;
         });
       } else {

@@ -14,6 +14,7 @@ import 'package:omi_pixel/models/segment.dart';
 import 'package:omi_pixel/models/session.dart';
 import 'package:omi_pixel/services/api_client.dart';
 import 'package:omi_pixel/services/audio_decoder.dart';
+import 'package:omi_pixel/services/auth_service.dart';
 import 'package:omi_pixel/services/ble_service.dart';
 import 'package:omi_pixel/services/gemini_live_service.dart';
 import 'package:omi_pixel/services/omi_ble_protocol.dart';
@@ -178,6 +179,43 @@ void main() {
       expect(OmiBleTransport.isLikelyOmiDevice('Omi CV1', const []), isTrue);
       expect(OmiBleTransport.isLikelyOmiDevice('DevKit 2', const []), isTrue);
       expect(OmiBleTransport.isLikelyOmiDevice('Random Speaker', const []), isFalse);
+    });
+
+    test('AuthService.configureFromBackend parses /api/client-config and persists runtime Firebase options', () async {
+      SharedPreferences.setMockInitialValues({});
+      String? initializedProjectId;
+
+      final ok = await AuthService.instance.configureFromBackend(
+        'https://omi-pixel.example.run.app/',
+        httpGet: (uri) async {
+          expect(uri.toString(), 'https://omi-pixel.example.run.app/api/client-config');
+          return http.Response(
+            jsonEncode({
+              'project_id': 'self-hosted-proj',
+              'api_key': 'pub-key-123',
+              'app_id': '1:555:web:xyz',
+              'messaging_sender_id': '555',
+              'auth_domain': 'self-hosted-proj.firebaseapp.com',
+              'storage_bucket': 'self-hosted-proj.firebasestorage.app',
+              'auth_disabled': false,
+            }),
+            200,
+          );
+        },
+        initializeFirebase: (opts) async {
+          initializedProjectId = opts.projectId;
+        },
+      );
+
+      expect(ok, isTrue);
+      expect(initializedProjectId, 'self-hosted-proj');
+      expect(AuthService.instance.usedRuntimeConfig, isTrue);
+
+      // auth_disabled=true returns null options cleanly
+      expect(
+        AuthService.parseClientConfigJson({'auth_disabled': true, 'project_id': 'p', 'api_key': 'k', 'app_id': 'a'}),
+        isNull,
+      );
     });
 
     test('SessionManager.handleHardwareButtonEvent enforces unlock, debounce, and haptic actions', () async {
