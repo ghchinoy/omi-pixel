@@ -139,7 +139,7 @@ Run `make help` at any time for a summary. All targets automatically load variab
 
 ### Mobile Build Prerequisites (Fresh Standalone Clone)
 `omi-pixel` is **100% standalone** — no sibling Omi repository is required.
-- **Flutter `3.44+` / Dart `3.12+`**, **JDK 17**, and **Android SDK (`compileSdk 37`)**
+- **Flutter `3.50+` / Dart `3.14+`**, **JDK 21**, and **Android SDK (`compileSdk 37`)**
 - Optional: Run **`make doctor-app`** to verify your Flutter toolchain, connected Pixel ADB device, and Firebase config before building.
 - **Firebase vs. Offline Mode**: `app/android/app/build.gradle.kts` conditionally applies the Google Services plugin only when `app/android/app/google-services.json` exists, so fresh clones can build and test offline (`make run-local-noauth`) immediately, then run `make configure-firebase` when ready for Google Sign-In.
 - **Custom Release Signing / Bundle ID (Optional)**: Add `app/android/key.properties` to sign release APKs with your own keystore (otherwise debug signing is used automatically for personal sideloading), or pass `-PapplicationId=com.yourorg.omi_pixel` if using a custom Firebase package name.
@@ -147,6 +147,10 @@ Run `make help` at any time for a summary. All targets automatically load variab
 ### Option A: Pre-Built Universal APK (Zero Local Flutter Install)
 1. Download `omi-pixel-vX.Y.Z.apk` from [GitHub Releases](https://github.com/ghchinoy/omi-pixel/releases) (or trigger the **CI & Release APK** GitHub Actions workflow on your fork).
 2. Sideload onto your Pixel (`adb install -r omi-pixel-vX.Y.Z.apk` or open the `.apk` directly on-device).
+   - **Official Release Signing Fingerprint** (used on all GitHub Releases from `v0.4.5+` for seamless in-place upgrades):
+     - `SHA-256`: `CD:8D:13:2B:C2:2A:8E:80:07:DE:FF:CB:7C:B7:FC:60:86:84:EB:09:D1:C3:DC:53:D7:67:2C:3F:ED:4E:CC:88`
+     - `SHA-1`: `0B:BA:7B:83:FC:E4:DC:E8:5E:DE:70:ED:8F:B9:A2:D0:71:C1:8B:FA`
+   - *(Note: If upgrading from an earlier debug-signed APK such as `v0.4.4` or a local `make install-apk` build, uninstall the previous build once before installing a release-signed APK; subsequent GitHub Release APKs will upgrade in-place via `adb install -r`.)*
 3. Open **Settings**, paste your deployed Cloud Run Service URL, and tap **Test Connection** — the app automatically fetches your project's public Firebase configuration from `GET /api/client-config`, initializes Firebase at runtime, and signs in with Google via Chrome Custom Tabs (zero Android SHA-1 setup required).
 
 ### Option B: Build & Sideload Locally (`make install-apk`)

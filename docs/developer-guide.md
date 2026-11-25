@@ -290,7 +290,7 @@ cd service && go run golang.org/x/vuln/cmd/govulncheck@latest ./...
   - **`go-service`**: `go vet`, `go test -race`, and `go build`.
   - **`flutter-android`**: `flutter pub get`, `flutter analyze`, `flutter test`, and standalone `flutter build apk --release` (uploading `omi-pixel-<ref>.apk` + `.sha256` artifact, and attaching them automatically to the GitHub Release on `v*` tags).
 - **Optional Repository Secrets (for custom signed / fork builds)**:
-  - `ANDROID_KEYSTORE_B64` & `ANDROID_KEY_PROPERTIES`: Release keystore signing.
+  - `ANDROID_KEYSTORE_B64` & `ANDROID_KEY_PROPERTIES`: Persistent PKCS12 release keystore signing (`storeFile=release.keystore` resolves to `app/android/release.keystore` via `rootProject.file(...)`). Official `ghchinoy/omi-pixel` releases are signed with certificate SHA-256 `CD:8D:13:2B:C2:2A:8E:80:07:DE:FF:CB:7C:B7:FC:60:86:84:EB:09:D1:C3:DC:53:D7:67:2C:3F:ED:4E:CC:88` (verified in CI logs via `keytool -printcert`).
   - `GOOGLE_SERVICES_JSON_B64` or `FIREBASE_PROJECT_ID` / `FIREBASE_ANDROID_API_KEY` / `FIREBASE_ANDROID_APP_ID` / `FIREBASE_MESSAGING_SENDER_ID`: Optional baked Firebase config (omitting them builds a universal APK that bootstraps via `GET /api/client-config`).
 
 ---

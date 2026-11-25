@@ -115,6 +115,8 @@ jobs:
           sha256sum "${APK_NAME}" > "${APK_NAME}.sha256"
           echo "apk_name=${APK_NAME}" >> "${GITHUB_OUTPUT}"
           cat "${APK_NAME}.sha256"
+          echo "=== APK Signing Certificate ==="
+          keytool -printcert -jarfile "${APK_NAME}" | grep -E "Owner:|Valid from:|SHA1:|SHA256:" || true
 
       - name: Upload APK build artifact
         uses: actions/upload-artifact@v7
