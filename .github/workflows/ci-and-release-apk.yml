@@ -116,7 +116,12 @@ jobs:
           echo "apk_name=${APK_NAME}" >> "${GITHUB_OUTPUT}"
           cat "${APK_NAME}.sha256"
           echo "=== APK Signing Certificate ==="
-          keytool -printcert -jarfile "${APK_NAME}" | grep -E "Owner:|Valid from:|SHA1:|SHA256:" || true
+          APKSIGNER="$(ls -1 "${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n 1 || true)"
+          if [ -n "${APKSIGNER}" ]; then
+            "${APKSIGNER}" verify --print-certs "${APK_NAME}"
+          else
+            keytool -printcert -jarfile "${APK_NAME}" | grep -E "Owner:|Valid from:|SHA1:|SHA256:" || true
+          fi
 
       - name: Upload APK build artifact
         uses: actions/upload-artifact@v7
